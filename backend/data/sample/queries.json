@@ -1,0 +1,84 @@
+{
+  "dataset_version": "sample-1",
+  "sample": true,
+  "queries": [
+    {
+      "id": "q1",
+      "patent_id": "US 11,200,001 B2",
+      "year": 2020,
+      "type": "mechanical",
+      "split": "dev",
+      "relevant": [
+        "US 9,104,382 B2",
+        "US 8,771,605 B1",
+        "US 9,876,540 B2",
+        "US 8,904,567 B1",
+        "US 7,982,411 B2"
+      ],
+      "claim": "A system for wireless charging of an electric vehicle, comprising: a transmitter coil embedded in a road surface; a receiver coil mounted on an underside of the vehicle; and a controller configured to adjust a resonant frequency based on an alignment of the transmitter coil and the receiver coil."
+    },
+    {
+      "id": "q2",
+      "patent_id": "US 11,200,002 B2",
+      "year": 2020,
+      "type": "exact_id",
+      "split": "dev",
+      "relevant": [
+        "US 7,982,411 B2",
+        "US 9,876,540 B2",
+        "US 8,904,567 B1"
+      ],
+      "claim": "A method of tuning a wireless charger, the method improving on the circuit of US 7,982,411 B2, comprising: measuring a coupling coefficient at a receiver; and adjusting a resonant frequency of a transmitter based on the coupling coefficient."
+    },
+    {
+      "id": "q3",
+      "patent_id": "US 11,300,001 B2",
+      "year": 2020,
+      "type": "chemical",
+      "split": "val",
+      "relevant": [
+        "US 9,500,101 B2",
+        "US 9,720,330 B1",
+        "US 9,880,421 B2"
+      ],
+      "claim": "A solid electrolyte comprising Li7La3Zr2O12 doped with tantalum, and an Al2O3 coating on grain boundaries."
+    },
+    {
+      "id": "q4",
+      "patent_id": "US 11,300,002 B2",
+      "year": 2020,
+      "type": "chemical",
+      "split": "val",
+      "relevant": [
+        "US 8,615,220 B2",
+        "US 8,992,555 B1"
+      ],
+      "claim": "A cathode comprising LiFePO4 particles having a conductive carbon coating."
+    },
+    {
+      "id": "q5",
+      "patent_id": "US 11,400,001 B2",
+      "year": 2020,
+      "type": "software",
+      "split": "test",
+      "relevant": [
+        "US 9,100,201 B2",
+        "US 9,250,764 B2",
+        "US 8,900,118 B2"
+      ],
+      "claim": "A method comprising: storing encrypted media segments at an edge node; validating an authorization token for each segment request; and serving the segment without decrypting at the edge node."
+    },
+    {
+      "id": "q6",
+      "patent_id": "US 11,400,002 B2",
+      "year": 2020,
+      "type": "software",
+      "split": "test",
+      "relevant": [
+        "US 9,400,330 B1",
+        "US 9,770,515 B2"
+      ],
+      "claim": "A system comprising: a prediction module that estimates future viewing of media segments; and a prefetch controller that retrieves predicted segments into an edge cache before they are requested."
+    }
+  ]
+}

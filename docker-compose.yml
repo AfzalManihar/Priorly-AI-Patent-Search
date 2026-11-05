@@ -1,0 +1,30 @@
+# Offline demo:   docker compose up --build
+# Real backends:  copy .env.example to .env, set DENSE_BACKEND=bge and QDRANT_URL=http://qdrant:6333,
+#                 then build with WITH_ML=true docker compose up --build
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports: ["6333:6333"]
+    volumes: ["qdrant_data:/qdrant/storage"]
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        WITH_ML: ${WITH_ML:-false}
+    ports: ["8000:8000"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DB_PATH: /srv/backend/data/priorly.db
+    volumes:
+      - app_data:/srv/backend/data
+    depends_on: [qdrant]
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:
+  app_data:

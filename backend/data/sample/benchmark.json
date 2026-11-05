@@ -1,0 +1,118 @@
+{
+  "dataset_version": "sample-1",
+  "sample": true,
+  "split": "all",
+  "query_count": 6,
+  "k": 10,
+  "generated_at": "2026-11-03T08:29:16+00:00",
+  "backends": {
+    "dense": "tfidf",
+    "rerank": "lexical",
+    "llm": "heuristic"
+  },
+  "corpus": {
+    "patents": 31
+  },
+  "note": "Examiner citations are an incomplete record of relevance, so these numbers are a lower bound. SAMPLE DATA: invented patents and a tiny query set. Do not quote these numbers.",
+  "stages": [
+    {
+      "key": "dense",
+      "name": "Dense only",
+      "recall": 1.0,
+      "precision": 0.3,
+      "mrr": 1.0,
+      "recall_ci": [
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "key": "hybrid",
+      "name": "+ BM25 and RRF",
+      "recall": 1.0,
+      "precision": 0.3,
+      "mrr": 1.0,
+      "recall_ci": [
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "key": "rerank",
+      "name": "+ Cross-encoder rerank",
+      "recall": 1.0,
+      "precision": 0.3,
+      "mrr": 1.0,
+      "recall_ci": [
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "key": "full",
+      "name": "+ Decompose and HyDE",
+      "recall": 0.9667,
+      "precision": 0.2833,
+      "mrr": 1.0,
+      "recall_ci": [
+        0.9,
+        1.0
+      ]
+    }
+  ],
+  "ablation_extra": [
+    {
+      "key": "decompose_only",
+      "name": "Rerank + decomposition only",
+      "recall": 0.9667,
+      "precision": 0.2833,
+      "mrr": 1.0,
+      "recall_ci": [
+        0.9,
+        1.0
+      ]
+    },
+    {
+      "key": "hyde_only",
+      "name": "Rerank + HyDE only",
+      "recall": 1.0,
+      "precision": 0.3,
+      "mrr": 1.0,
+      "recall_ci": [
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "by_type": [
+    {
+      "type": "Chemical and formula queries",
+      "n": 2,
+      "dense": 1.0,
+      "hybrid": 1.0,
+      "full": 1.0
+    },
+    {
+      "type": "Queries containing an exact patent ID",
+      "n": 1,
+      "dense": 1.0,
+      "hybrid": 1.0,
+      "full": 1.0
+    },
+    {
+      "type": "Mechanical claims",
+      "n": 1,
+      "dense": 1.0,
+      "hybrid": 1.0,
+      "full": 0.8
+    },
+    {
+      "type": "Software and protocol claims",
+      "n": 2,
+      "dense": 1.0,
+      "hybrid": 1.0,
+      "full": 1.0
+    }
+  ],
+  "failure_cases": []
+}

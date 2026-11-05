@@ -1,0 +1,32 @@
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+backend/data/priorly.db
+backend/data/raw/
+backend/data/real/
+
+# Python virtual environments
+.venv/
+**/.venv/
+venv/
+
+# Frontend dependencies and builds
+node_modules/
+.next/
+dist/
+build/
+
+# Environment secrets
+.env.*
+!.env.example
+
+# Local secrets and generated files
+.streamlit/secrets.toml
+*.log
+*.db-wal
+*.db-shm
+
+# Generated evaluation cache and vector database
+backend/data/eval_cache.db
+backend/data/qdrant_storage/

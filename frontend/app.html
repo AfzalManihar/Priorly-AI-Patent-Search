@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Workspace | Priorly</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<script>
+  (function(){try{var t=localStorage.getItem("priorly-theme");if(!t&&window.matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}})();
+</script>
+</head>
+<body>
+<div class="app">
+
+  <aside class="side">
+    <a href="index.html" class="logo" aria-label="Priorly home">
+      <svg viewBox="0 0 26 26" aria-hidden="true"><rect width="26" height="26" rx="7" fill="var(--ink)"/><rect x="5" y="6" width="16" height="3.4" rx="1.7" fill="var(--e1)"/><rect x="5" y="11.3" width="11" height="3.4" rx="1.7" fill="var(--e2)"/><rect x="5" y="16.6" width="14" height="3.4" rx="1.7" fill="var(--e3)"/></svg>
+      Priorly
+    </a>
+    <div class="ws"><div class="avatar">AM</div><div><b>Afzal's workspace</b><small id="wsInfo">Checking the API…</small></div></div>
+    <nav class="menu" aria-label="Workspace">
+      <button data-view="search" aria-current="page"><span data-i="search"></span>New search</button>
+      <button data-view="eval"><span data-i="chart"></span>Benchmark</button>
+      <button data-view="saved"><span data-i="bookmark"></span>Saved reports<span class="count" id="savedCount">3</span></button>
+      <button data-view="settings"><span data-i="settings"></span>Pipeline settings</button>
+    </nav>
+    <div class="foot">
+      <div class="usage">Searches this month<div class="track"><i></i></div><div style="margin-top:6px">21 of 50 used</div></div>
+      <button class="btn ghost sm" id="themeBtn" aria-label="Toggle dark mode" style="justify-content:flex-start"><span id="themeIcon"></span><span id="themeLabel">Dark mode</span></button>
+    </div>
+  </aside>
+
+  <main>
+    <div id="modeBar" class="modebar" role="status"></div>
+    <!-- Search -->
+    <section class="view on" id="v-search">
+      <div class="top">
+        <div><h1>New search</h1><p>Paste a claim and find the prior art that matches it.</p></div>
+      </div>
+      <div class="grid2">
+        <div>
+          <div class="card">
+            <label class="field-label" for="claim"><span>Patent claim</span><span id="charCount">0 characters</span></label>
+            <textarea id="claim" spellcheck="false"></textarea>
+            <div class="toolbar">
+              <label class="tg"><input type="checkbox" id="optDecompose" checked><span class="sw"></span>Decompose claim</label>
+              <label class="tg"><input type="checkbox" id="optHyde" checked><span class="sw"></span>HyDE</label>
+              <label class="tg"><input type="checkbox" id="optHybrid" checked><span class="sw"></span>Hybrid search</label>
+              <label class="tg"><input type="checkbox" id="optRerank" checked><span class="sw"></span>Rerank</label>
+              <span class="spacer"></span>
+              <label class="tg">Show <select id="optK" aria-label="Number of results"><option value="5">top 5</option><option value="10" selected>top 10</option></select></label>
+              <button class="btn primary" id="runBtn"><span data-i="play"></span>Find prior art</button>
+            </div>
+            <div class="prog" id="prog" aria-live="polite"></div>
+          </div>
+
+          <div id="results"></div>
+        </div>
+
+        <aside class="aside">
+          <div class="card">
+            <h3>Claim elements</h3>
+            <div id="elements"></div>
+          </div>
+          <div class="card">
+            <h3>Coverage in results</h3>
+            <div id="coverage"><p style="color:var(--ink3);font-size:13.5px">Run a search to see which elements the results cover.</p></div>
+          </div>
+          <div class="card">
+            <h3>This run</h3>
+            <div id="runInfo"><p style="color:var(--ink3);font-size:13.5px">No search yet.</p></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Benchmark -->
+    <section class="view" id="v-eval">
+      <div class="top">
+        <div><h1>Benchmark</h1><p id="evalSub">How much each retrieval layer adds, measured on examiner-cited ground truth.</p></div>
+        <button class="btn sm" id="exportBtn"><span data-i="download"></span>Export table</button>
+      </div>
+      <div class="metrics" id="metrics"></div>
+      <div class="card">
+        <h3>Lift by pipeline stage</h3>
+        <div id="chartHost"></div>
+      </div>
+      <div class="card">
+        <h3>Where each strategy wins, by query type (Recall@10)</h3>
+        <table id="typeTable"></table>
+        <p class="note" id="evalNote"></p>
+      </div>
+      <div class="card">
+        <h3>What each layer bought</h3>
+        <div class="list" id="ablation"></div>
+      </div>
+    </section>
+
+    <!-- Saved -->
+    <section class="view" id="v-saved">
+      <div class="top"><div><h1>Saved reports</h1><p>Searches you kept, newest first.</p></div></div>
+      <div class="card"><div class="list" id="savedList"></div></div>
+    </section>
+
+    <!-- Settings -->
+    <section class="view" id="v-settings">
+      <div class="top"><div><h1>Pipeline settings</h1><p>The knobs behind each stage. Defaults are tuned on the benchmark.</p></div></div>
+      <div class="card">
+        <form class="form" id="settingsForm">
+          <label>Embedding model
+            <select class="inp" name="emb"><option>bge-base-en-v1.5</option><option>text-embedding-3-small</option><option>e5-large-v2</option></select>
+            <span class="hint">Used for vector search and HyDE queries.</span></label>
+          <label>Reranker
+            <select class="inp" name="rr"><option>bge-reranker-base (local)</option><option>Cohere Rerank</option></select>
+            <span class="hint">Cross-encoder for the final scoring pass.</span></label>
+          <label>RRF constant (k)
+            <input class="inp" type="number" value="60" min="1" max="200" name="rrf">
+            <span class="hint">Higher values flatten the effect of top ranks.</span></label>
+          <label>Candidates per retriever
+            <input class="inp" type="number" value="50" min="10" max="200" name="cand">
+            <span class="hint">How many hits BM25 and vector search each pass on.</span></label>
+          <label>Rerank depth
+            <input class="inp" type="number" value="50" min="10" max="100" name="depth">
+            <span class="hint">Fused candidates sent to the cross-encoder.</span></label>
+          <label>LLM for decomposition and reasons
+            <select class="inp" name="llm"><option>Groq, llama-3.3-70b</option><option>OpenAI, gpt-4o-mini</option></select>
+            <span class="hint">Writes elements, HyDE passages, and result reasons.</span></label>
+          <p id="settingsNote" class="note" style="grid-column:1/-1;margin:0"></p>
+          <div style="grid-column:1/-1;display:flex;gap:8px"><button class="btn primary" type="submit">Save settings</button><button class="btn" type="reset">Reset to defaults</button></div>
+        </form>
+        <div class="form" style="margin-top:24px">
+          <div style="grid-column:1/-1">
+            <h3 style="margin:0 0 4px">Stored data</h3>
+            <p class="note" style="margin:0 0 12px">Searches are kept so they can be replayed and saved as reports. Erase them here at any time. Settings are kept.</p>
+            <button class="btn" type="button" id="eraseBtn">Erase stored searches and reports</button>
+            <p id="eraseNote" class="note" style="margin:8px 0 0"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="scrim"></div>
+<aside id="drawer" aria-label="Result trace" aria-hidden="true"></aside>
+<div id="toast" role="status"></div>
+
+<script src="js/icons.js"></script>
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

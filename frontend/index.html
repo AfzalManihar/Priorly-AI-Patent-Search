@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Priorly | Prior-art search for patent claims</title>
+<meta name="description" content="Paste a patent claim. Priorly splits it into elements, searches by keyword and meaning, and ranks prior art with the passage that matches.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<script>
+  (function(){try{var t=localStorage.getItem("priorly-theme");if(!t&&window.matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}})();
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a href="index.html" class="logo" aria-label="Priorly home">
+      <svg viewBox="0 0 26 26" aria-hidden="true"><rect width="26" height="26" rx="7" fill="var(--ink)"/><rect x="5" y="6" width="16" height="3.4" rx="1.7" fill="var(--e1)"/><rect x="5" y="11.3" width="11" height="3.4" rx="1.7" fill="var(--e2)"/><rect x="5" y="16.6" width="14" height="3.4" rx="1.7" fill="var(--e3)"/></svg>
+      Priorly
+    </a>
+    <nav aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="#hybrid">Why hybrid</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="actions">
+      <a class="btn ghost sm" href="app.html">Sign in</a>
+      <a class="btn primary sm" href="app.html">Start a search</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <h1>Find the patent that already did it.</h1>
+      <p class="lede">Paste a claim. Priorly splits it into elements, searches by keyword and by meaning, and ranks prior art with the exact passage that matches.</p>
+      <div class="cta">
+        <a class="btn primary lg" href="app.html">Run a sample search <span data-i="arrow"></span></a>
+        <a class="btn lg" href="#evidence">See the benchmark</a>
+      </div>
+      <p class="fine">Demo workspace. All patents shown are fictional.</p>
+    </div>
+
+    <div class="panel demo" aria-label="Example search result">
+      <div class="label">Claim 1</div>
+      <p class="claim-text">A system for wireless charging of an electric vehicle, comprising: <mark data-e="1">a transmitter coil embedded in a road surface</mark>; <mark data-e="2">a receiver coil mounted on an underside of the vehicle</mark>; and <mark data-e="3">a controller configured to adjust a resonant frequency based on an alignment of the coils</mark>.</p>
+      <div class="legend">
+        <span class="chip e1">E1 Road coil</span>
+        <span class="chip e2">E2 Vehicle coil</span>
+        <span class="chip e3">E3 Frequency tuning</span>
+      </div>
+      <div class="res">
+        <div class="rank">1</div>
+        <div>
+          <h4>Inductive power transfer system for roadway vehicles</h4>
+          <div class="meta">US 9,104,382 B2 &middot; Voltaic Mobility Inc. &middot; 2015</div>
+          <div style="display:flex;gap:6px;margin-top:10px"><span class="chip e1">E1</span><span class="chip e2">E2</span><span class="chip e3">E3</span></div>
+          <p class="quote">A controller <mark data-e="3">shifts the resonant frequency when lateral misalignment between the coils is detected</mark>.</p>
+        </div>
+        <div class="score">0.91</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec alt" id="how">
+  <div class="wrap">
+    <h2>From one long claim to a ranked reading list</h2>
+    <p class="sub">Each stage has one job, and each one is measured against real examiner citations.</p>
+    <div class="steps">
+      <div class="step"><b>1</b><h3>Decompose</h3><p>An LLM splits the claim into elements that can be searched on their own.</p></div>
+      <div class="step"><b>2</b><h3>Expand</h3><p>HyDE writes the passage a matching patent would contain, so technical wording lines up.</p></div>
+      <div class="step"><b>3</b><h3>Retrieve</h3><p>Keyword search catches exact terms and IDs. Vector search catches paraphrase.</p></div>
+      <div class="step"><b>4</b><h3>Fuse</h3><p>Reciprocal rank fusion merges both lists without any weights to tune.</p></div>
+      <div class="step"><b>5</b><h3>Rerank</h3><p>A cross-encoder reads claim and passage together and picks the closest.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="hybrid">
+  <div class="wrap">
+    <h2>Meaning search alone misses exact matches</h2>
+    <p class="sub">The same query, run two ways. The patent that uses the claim's own phrase sits at rank 38 in vector search.</p>
+    <div class="split">
+      <div class="panel case">
+        <h3>Vector search only</h3>
+        <p class="cap">Strong on paraphrase, weak on exact wording.</p>
+        <div class="rows">
+          <div class="rowx"><span class="pos">1</span><span>Inductive power transfer system for roadway vehicles</span><small>0.91</small></div>
+          <div class="rowx"><span class="pos">2</span><span>Dynamic charging pad with alignment sensing</span><small>0.84</small></div>
+          <div class="rowx miss"><span class="pos">38</span><span>Resonant coupling frequency tuning circuit<small>Exact phrase match, buried</small></span><small>miss</small></div>
+        </div>
+      </div>
+      <div class="panel case">
+        <h3>Keyword and vector, fused</h3>
+        <p class="cap">Both lists merged, then reranked.</p>
+        <div class="rows">
+          <div class="rowx"><span class="pos">1</span><span>Inductive power transfer system for roadway vehicles</span><small>0.91</small></div>
+          <div class="rowx"><span class="pos">2</span><span>Dynamic charging pad with alignment sensing</span><small>0.84</small></div>
+          <div class="rowx hit"><span class="pos">5</span><span>Resonant coupling frequency tuning circuit<small>Recovered by keyword search</small></span><small>hit</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec alt" id="evidence">
+  <div class="wrap">
+    <div class="bars">
+      <div>
+        <h2>Every layer has to earn its place</h2>
+        <p class="sub">Priorly reports Recall@10 after each stage, scored against the prior art that examiners actually cited on granted patents.</p>
+        <p class="note">Sample numbers for this demo. Your own run produces the real table.</p>
+      </div>
+      <div id="lift" aria-label="Recall at 10 by pipeline stage"></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <h2>Built for people who have to defend the search</h2>
+    <div class="feat">
+      <div><h3>Element coverage</h3><p>See which patents cover which parts of the claim, so combinations are obvious at a glance.</p></div>
+      <div><h3>Passage-level reasons</h3><p>Every result shows the matching passage with its column and line, and a plain-language reason it ranked.</p></div>
+      <div><h3>Trace for each result</h3><p>Open any result to see its rank in keyword search, vector search, fusion, and rerank.</p></div>
+      <div><h3>Saved search reports</h3><p>Keep searches, compare runs, and export a report for the file.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec alt" id="pricing">
+  <div class="wrap">
+    <h2>Simple plans</h2>
+    <p class="sub">Placeholder pricing for the demo.</p>
+    <div class="plans">
+      <div class="panel plan">
+        <h3>Solo</h3><div class="price">$29<small> / month</small></div>
+        <ul><li><span data-i="check"></span>50 searches a month</li><li><span data-i="check"></span>Saved reports</li><li><span data-i="check"></span>PDF export</li></ul>
+        <a class="btn" href="app.html">Start with Solo</a>
+      </div>
+      <div class="panel plan hot">
+        <h3>Team</h3><div class="price">$99<small> / seat / month</small></div>
+        <ul><li><span data-i="check"></span>Unlimited searches</li><li><span data-i="check"></span>Result traces and benchmark view</li><li><span data-i="check"></span>Shared workspaces</li></ul>
+        <a class="btn primary" href="app.html">Start with Team</a>
+      </div>
+      <div class="panel plan">
+        <h3>Enterprise</h3><div class="price">Custom</div>
+        <ul><li><span data-i="check"></span>Your own patent corpus</li><li><span data-i="check"></span>Single sign-on</li><li><span data-i="check"></span>Audit log</li></ul>
+        <a class="btn" href="app.html">Talk to us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <div class="faq">
+      <details><summary>What does Priorly search?</summary><p>A corpus of granted patents and published applications. The demo uses a fictional set so you can explore the interface safely.</p></details>
+      <details><summary>How is relevance measured?</summary><p>Against the references that examiners cited on granted patents. Recall@10 and precision@10 are reported after every pipeline stage.</p></details>
+      <details><summary>Why split a claim into elements?</summary><p>One prior-art document rarely covers a whole claim. Searching elements separately finds the pieces, and the coverage view shows how they combine.</p></details>
+      <details><summary>Is this legal advice?</summary><p>No. Priorly is a research tool. A patent professional should review any conclusion about validity.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="sec alt final">
+  <div class="wrap">
+    <h2>Run your first claim in a minute</h2>
+    <div class="cta"><a class="btn primary lg" href="app.html">Open the workspace</a></div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap"><span>Priorly. Portfolio project, demo data only.</span><span>Built with hybrid retrieval, RRF, and cross-encoder reranking.</span></div>
+</footer>
+
+<script src="js/icons.js"></script>
+<script src="js/data.js"></script>
+<script>
+  (function(){
+    var host=document.getElementById("lift");
+    EVAL.stages.forEach(function(s,i){
+      var row=document.createElement("div");row.className="bar-row";
+      row.innerHTML='<span>'+s.name+'</span><div class="track"><i class="'+(i===0?'base':'')+'"></i></div><span>'+s.recall.toFixed(2)+'</span>';
+      host.appendChild(row);
+    });
+    var go=function(){host.querySelectorAll(".track i").forEach(function(el,i){el.style.width=(EVAL.stages[i].recall*100)+"%"})};
+    if("IntersectionObserver" in window){
+      new IntersectionObserver(function(e,o){if(e[0].isIntersecting){go();o.disconnect()}},{threshold:.3}).observe(host);
+    } else go();
+  })();
+</script>
+</body>
+</html>
