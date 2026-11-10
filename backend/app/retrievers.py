@@ -66,6 +66,23 @@ class BM25Index:
             [tokenize(c.text) or ["_empty_"] for c in corpus.chunks]
         )
 
+        # Build an inverted index once; queries only visit matching documents.
+        postings = {}
+        for doc_idx, frequencies in enumerate(self.bm25.doc_freqs):
+            for token, frequency in frequencies.items():
+                postings.setdefault(token, ([], []))
+                postings[token][0].append(doc_idx)
+                postings[token][1].append(frequency)
+
+        self.postings = {
+            token: (
+                np.asarray(indices, dtype=np.int32),
+                np.asarray(freqs, dtype=float),
+            )
+            for token, (indices, freqs) in postings.items()
+        }
+        self.doc_len = np.asarray(self.bm25.doc_len, dtype=float)
+
     def search(
         self,
         query: str,
@@ -77,7 +94,26 @@ class BM25Index:
         if not tokens:
             return []
 
-        scores = np.asarray(self.bm25.get_scores(tokens), dtype=float)
+        scores = np.zeros(self.bm25.corpus_size, dtype=float)
+
+        for token in tokens:
+            posting = self.postings.get(token)
+            if posting is None:
+                continue
+
+            indices, frequencies = posting
+            idf = self.bm25.idf.get(token) or 0
+            if idf == 0:
+                continue
+
+            denominator = frequencies + self.bm25.k1 * (
+                1 - self.bm25.b
+                + self.bm25.b * self.doc_len[indices] / self.bm25.avgdl
+            )
+            scores[indices] += idf * (
+                frequencies * (self.bm25.k1 + 1) / denominator
+            )
+
         mask = self.corpus.mask(cons.exclude_ids, cons.max_year)
 
         return _top(scores, mask, n, positive_only=True)
