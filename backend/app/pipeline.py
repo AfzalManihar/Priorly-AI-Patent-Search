@@ -189,9 +189,9 @@ class Engine:
             try:
                 texts = self.llm.decompose(claim)
 
-            except LLMError:
+            except LLMError as exc:
                 log.warning(
-                    "decomposition failed, falling back to rules"
+                    "decomposition failed, falling back to rules: %s", str(exc)[:200]
                 )
                 texts = heuristic_decompose(claim)
                 degraded.append("decompose")
@@ -220,9 +220,9 @@ class Engine:
                 try:
                     dense_queries.append(self.llm.hyde(text))
 
-                except LLMError:
+                except LLMError as exc:
                     log.warning(
-                        "HyDE failed for one element, using the element text"
+                        "HyDE failed for one element, using the element text: %s", str(exc)[:200]
                     )
                     dense_queries.append(text)
 
