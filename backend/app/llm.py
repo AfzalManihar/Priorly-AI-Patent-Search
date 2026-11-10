@@ -9,6 +9,7 @@ Backends
 from __future__ import annotations
 
 import hashlib
+from email.utils import parsedate_to_datetime
 import json
 import re
 import time
@@ -102,28 +103,70 @@ class GroqLLM:
         }
         if json_mode:
             body["response_format"] = {"type": "json_object"}
-        delay = 0.5
         for attempt in range(3):
             try:
                 response = self.client.post("/chat/completions", json=body)
             except httpx.HTTPError as exc:
                 if attempt == 2:
-                    raise LLMError("LLM request failed") from exc
+                    raise LLMError("LLM request failed after 3 attempts") from exc
+                delay = 1.0 * (2 ** attempt)
             else:
                 if response.status_code == 200:
                     try:
                         return response.json()["choices"][0]["message"]["content"].strip()
-                    except (KeyError, IndexError, ValueError) as exc:
+                    except (KeyError, IndexError, TypeError, ValueError) as exc:
                         raise LLMError("LLM returned an unexpected response") from exc
-                if response.status_code not in (429, 500, 502, 503, 504) or attempt == 2:
-                    detail = ""
-                    try:
-                        detail = str(response.json().get("error", {}).get("message", ""))[:200]
-                    except (ValueError, AttributeError):
-                        pass
-                    raise LLMError(f"LLM returned status {response.status_code}" + (f": {detail}" if detail else ""))
+
+                status = response.status_code
+                detail = ""
+                try:
+                    detail = str(response.json().get("error", {}).get("message", ""))[:200]
+                except (ValueError, AttributeError):
+                    pass
+
+                if status not in (429, 500, 502, 503, 504) or attempt == 2:
+                    raise LLMError(
+                        f"LLM returned status {status}" + (f": {detail}" if detail else "")
+                    )
+
+                delay = 5.0 * (2 ** attempt) if status == 429 else 1.0 * (2 ** attempt)
+
+                if status == 429:
+                    header_delays = []
+                    for name in ("retry-after", "x-ratelimit-reset-tokens",
+                                 "x-ratelimit-reset-requests"):
+                        raw = response.headers.get(name, "").strip().lower()
+                        if not raw:
+                            continue
+                        try:
+                            if raw.endswith("ms"):
+                                seconds = float(raw[:-2]) / 1000
+                            elif raw.endswith("s"):
+                                seconds = float(raw[:-1])
+                            elif raw.endswith("m"):
+                                seconds = float(raw[:-1]) * 60
+                            else:
+                                seconds = float(raw)
+                            if seconds >= 0:
+                                header_delays.append(seconds)
+                        except ValueError:
+                            try:
+                                reset_at = parsedate_to_datetime(raw).timestamp()
+                                seconds = max(0.0, reset_at - time.time())
+                                header_delays.append(seconds)
+                            except (TypeError, ValueError, OverflowError):
+                                continue
+                    if header_delays:
+                        delay = max(header_delays)
+
+                    if delay > 60:
+                        raise LLMError(
+                            f"Groq rate limit requires waiting {delay:.1f}s; "
+                            "retry stopped to avoid another rate-limit request"
+                        )
+
             self.sleep(delay)
-            delay *= 3
+
         raise LLMError("LLM request failed")  # pragma: no cover
 
     # -- stages -----------------------------------------------------------------

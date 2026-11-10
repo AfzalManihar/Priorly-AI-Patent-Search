@@ -131,3 +131,80 @@ def test_llm_retries_rate_limits_then_gives_up():
 def test_llm_requires_key():
     with pytest.raises(LLMError):
         GroqLLM("", "m", "https://example.test/v1")
+
+
+def test_llm_429_respects_retry_after_header():
+    attempts, waits = [], []
+
+    def handler(request):
+        attempts.append(1)
+        if len(attempts) == 1:
+            return httpx.Response(429, headers={"Retry-After": "7"})
+        return _ok("expanded passage")
+
+    llm = GroqLLM(
+        "key", "m", "https://example.test/v1",
+        transport=httpx.MockTransport(handler), sleep=waits.append,
+    )
+    assert llm.hyde("element") == "expanded passage"
+    assert len(attempts) == 2
+    assert waits == [7.0]
+
+
+def test_llm_429_uses_groq_reset_header():
+    attempts, waits = [], []
+
+    def handler(request):
+        attempts.append(1)
+        if len(attempts) == 1:
+            return httpx.Response(
+                429, headers={"x-ratelimit-reset-tokens": "8s"}
+            )
+        return _ok("expanded passage")
+
+    llm = GroqLLM(
+        "key", "m", "https://example.test/v1",
+        transport=httpx.MockTransport(handler), sleep=waits.append,
+    )
+    assert llm.hyde("element") == "expanded passage"
+    assert waits == [8.0]
+
+
+def test_llm_429_stops_when_retry_after_exceeds_safety_limit():
+    attempts, waits = [], []
+
+    def handler(request):
+        attempts.append(1)
+        return httpx.Response(429, headers={"Retry-After": "120"})
+
+    llm = GroqLLM(
+        "key", "m", "https://example.test/v1",
+        transport=httpx.MockTransport(handler), sleep=waits.append,
+    )
+    with pytest.raises(LLMError, match="waiting 120.0s"):
+        llm.hyde("element")
+    assert len(attempts) == 1
+    assert waits == []
+
+
+def test_llm_429_respects_http_date_retry_after(monkeypatch):
+    from email.utils import formatdate
+
+    attempts, waits = [], []
+    monkeypatch.setattr("app.llm.time.time", lambda: 1000.0)
+
+    def handler(request):
+        attempts.append(1)
+        if len(attempts) == 1:
+            return httpx.Response(
+                429, headers={"Retry-After": formatdate(1007, usegmt=True)}
+            )
+        return _ok("expanded passage")
+
+    llm = GroqLLM(
+        "key", "m", "https://example.test/v1",
+        transport=httpx.MockTransport(handler), sleep=waits.append,
+    )
+    assert llm.hyde("element") == "expanded passage"
+    assert len(attempts) == 2
+    assert waits == [7.0]
