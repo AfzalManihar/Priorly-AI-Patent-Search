@@ -582,16 +582,17 @@ class Engine:
 
         threshold = self.scorer.coverage_threshold
 
-        covered = [
-            n
-            for n in range(1, n_el + 1)
-            if max(row[n - 1] for row in matrix) >= threshold
-        ]
-
         display = max(
             range(len(chunk_ids)),
             key=lambda i: sum(matrix[i]),
         )
+
+        # Coverage must match the exact passage shown as evidence.
+        covered = [
+            n
+            for n in range(1, n_el + 1)
+            if matrix[display][n - 1] >= threshold
+        ]
 
         return covered, chunk_ids[display]
 
