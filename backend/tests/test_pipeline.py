@@ -107,3 +107,27 @@ def test_exact_identifier_is_found_by_keyword_search():
     for query in ("see US 5,555,123", "LiFePO4 dopant"):
         hits = index.search(query, 3, Constraints())
         assert corpus.chunks[hits[0][0]].patent_id == "US 1,000,002"
+
+def test_coverage_matches_displayed_evidence():
+    from types import SimpleNamespace
+    from app.pipeline import Engine
+
+    fake = SimpleNamespace(
+        corpus=SimpleNamespace(
+            by_patent={"P1": [0, 1]},
+            chunks=[
+                SimpleNamespace(text="passage supporting E1"),
+                SimpleNamespace(text="passage supporting E2"),
+            ],
+        ),
+        scorer=SimpleNamespace(
+            coverage_threshold=0.5,
+            score_pairs=lambda pairs: [0.9, 0.1, 0.1, 0.9],
+        ),
+    )
+
+    covered, display_idx = Engine._coverage(fake, ["E1", "E2"], "P1")
+
+    assert display_idx == 0
+    assert covered == [1]
+
