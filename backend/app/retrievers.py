@@ -271,50 +271,101 @@ class QdrantDense:
         m = self.models
         total = len(self.corpus.chunks)
 
+        if batch <= 0:
+            raise ValueError("batch must be greater than zero")
+
         if self.client.collection_exists(self.collection):
-            existing = self.client.count(
+            existing_count = self.client.count(
                 self.collection,
                 exact=True,
             ).count
 
-            if existing == total:
+            if existing_count == total:
                 return
-
-            self.client.delete_collection(self.collection)
-
-        self.client.create_collection(
-            self.collection,
-            vectors_config=m.VectorParams(
-                size=int(self.embedder.dim),
-                distance=m.Distance.COSINE,
-            ),
-        )
-
-        for batch_no, start in enumerate(range(0, total, batch), start=1):
-            part = self.corpus.chunks[start:start + batch]
-
-            vectors = self.embedder.encode(
-                [c.text for c in part]
-            )
-
-            self.client.upsert(
+        else:
+            self.client.create_collection(
                 self.collection,
-                points=[
-                    m.PointStruct(
-                        id=c.idx,
-                        vector=vectors[i].tolist(),
-                        payload={
-                            "patent_id": c.patent_id,
-                            "year": self.corpus.patents[
-                                c.patent_id
-                            ].year,
-                        },
-                    )
-                    for i, c in enumerate(part)
-                ],
+                vectors_config=m.VectorParams(
+                    size=int(self.embedder.dim),
+                    distance=m.Distance.COSINE,
+                ),
             )
-            if batch_no == 1 or batch_no % 25 == 0 or start + len(part) >= total:
-                print(f"Qdrant indexing: {min(start + len(part), total)}/{total} chunks", flush=True)
+            existing_count = 0
+
+        processed = 0
+        newly_indexed = 0
+
+        for start in range(0, total, batch):
+            part = self.corpus.chunks[start:start + batch]
+            ids = [chunk.idx for chunk in part]
+
+            records = self.client.retrieve(
+                collection_name=self.collection,
+                ids=ids,
+                with_payload=False,
+                with_vectors=False,
+            )
+
+            existing_ids = {record.id for record in records}
+
+            missing = [
+                chunk for chunk in part
+                if chunk.idx not in existing_ids
+            ]
+
+            if missing:
+                vectors = self.embedder.encode(
+                    [chunk.text for chunk in missing]
+                )
+
+                self.client.upsert(
+                    collection_name=self.collection,
+                    points=[
+                        m.PointStruct(
+                            id=chunk.idx,
+                            vector=vectors[i].tolist(),
+                            payload={
+                                "patent_id": chunk.patent_id,
+                                "year": self.corpus.patents[
+                                    chunk.patent_id
+                                ].year,
+                            },
+                        )
+                        for i, chunk in enumerate(missing)
+                    ],
+                    wait=True,
+                )
+
+                newly_indexed += len(missing)
+
+            processed += len(part)
+
+            if (
+                processed == total
+                or processed % (batch * 25) == 0
+            ):
+                current_count = self.client.count(
+                    self.collection,
+                    exact=True,
+                ).count
+
+                print(
+                    f"Qdrant indexing: {processed}/{total} chunks "
+                    f"| collection: {current_count}/{total} "
+                    f"| added this run: {newly_indexed}",
+                    flush=True,
+                )
+
+        final_count = self.client.count(
+            self.collection,
+            exact=True,
+        ).count
+
+        if final_count != total:
+            raise DependencyError(
+                f"Qdrant indexing incomplete: "
+                f"{final_count}/{total} points"
+            )
 
     def search(
         self,
@@ -421,4 +472,3 @@ def aggregate_to_patents(
         (patent, best[patent], chunks[patent])
         for patent in ordered
     ]
-

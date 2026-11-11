@@ -1,4 +1,4 @@
-"""Corpus loading and chunking.
+﻿"""Corpus loading and chunking.
 
 Corpus file format (JSON Lines), one patent per line:
   {"id": "US 9,104,382 B2", "title": "...", "assignee": "...", "year": 2015,
@@ -37,21 +37,38 @@ class Chunk:
 
 
 def split_text(text: str, max_chars: int = 1200) -> list[str]:
-    """Split long text on sentence boundaries so each piece stays under max_chars."""
+    """Split text into bounded chunks without dropping any content."""
+    if max_chars < 1:
+        raise ValueError("max_chars must be positive")
+
     text = " ".join(text.split())
-    if len(text) <= max_chars:
-        return [text] if text else []
+    if not text:
+        return []
+
     sentences = re.split(r"(?<=[.;!?])\s+", text)
     pieces: list[str] = []
     current = ""
-    for sentence in sentences:
-        if current and len(current) + 1 + len(sentence) > max_chars:
+
+    def flush() -> None:
+        nonlocal current
+        if current:
             pieces.append(current)
-            current = sentence
-        else:
-            current = f"{current} {sentence}".strip()
-    if current:
-        pieces.append(current)
+            current = ""
+
+    for sentence in sentences:
+        words = sentence.split()
+        for word in words:
+            # Split exceptionally long tokens as a last resort.
+            parts = [word[i:i + max_chars] for i in range(0, len(word), max_chars)]
+            for part in parts:
+                candidate = f"{current} {part}".strip()
+                if current and len(candidate) > max_chars:
+                    flush()
+                    current = part
+                else:
+                    current = candidate
+        # Preserve sentence boundaries where possible.
+    flush()
     return pieces
 
 

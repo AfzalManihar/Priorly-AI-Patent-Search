@@ -94,3 +94,66 @@ def test_qdrant_path_works_in_memory():
     excluded = corpus.chunks[hits[0][0]].patent_id
     again = dense.search("transmitter coil embedded in a road surface", 5, Constraints(exclude_ids=frozenset([excluded])))
     assert all(corpus.chunks[i].patent_id != excluded for i, _ in again)
+
+def test_qdrant_resume_indexes_only_missing_points():
+    corpus = load_corpus(SAMPLE / "corpus.jsonl")
+    dense = QdrantDense(
+        corpus,
+        make_embedder("hash"),
+        ":memory:",
+        "test_resume_collection",
+    )
+
+    total = len(corpus.chunks)
+    assert total >= 3
+
+    # Save an existing point's vector before simulating interruption.
+    preserved_id = corpus.chunks[0].idx
+    preserved_before = dense.client.retrieve(
+        "test_resume_collection",
+        ids=[preserved_id],
+        with_payload=True,
+        with_vectors=True,
+    )[0]
+
+    # Simulate an interrupted index by deleting the final two points.
+    missing_ids = [
+        corpus.chunks[-2].idx,
+        corpus.chunks[-1].idx,
+    ]
+
+    dense.client.delete(
+        collection_name="test_resume_collection",
+        points_selector=dense.models.PointIdsList(
+            points=missing_ids
+        ),
+        wait=True,
+    )
+
+    partial_count = dense.client.count(
+        "test_resume_collection",
+        exact=True,
+    ).count
+
+    assert partial_count == total - 2
+
+    # Resume indexing. Only the two missing points should be added.
+    dense.ensure_index(batch=2)
+
+    final_count = dense.client.count(
+        "test_resume_collection",
+        exact=True,
+    ).count
+
+    assert final_count == total
+
+    # Confirm the previously indexed point was preserved.
+    preserved_after = dense.client.retrieve(
+        "test_resume_collection",
+        ids=[preserved_id],
+        with_payload=True,
+        with_vectors=True,
+    )[0]
+
+    assert preserved_after.vector == preserved_before.vector
+    assert preserved_after.payload == preserved_before.payload

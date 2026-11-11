@@ -40,3 +40,29 @@ def test_build_from_csv(tmp_path):
     assert q["cpc"] == "H02J 50/20" and q["year"] == 2015
     cites = json.loads((out / "citations.json").read_text(encoding="utf-8"))
     assert cites == {"US 9,000,001": ["US 5,000,001", "US RE43699"]}  # id 999 has no metadata, dropped
+
+
+
+def test_build_includes_missing_claims_with_cited_metadata(tmp_path):
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    raw.mkdir()
+
+    _write(raw / "patents.csv",
+           ["patent_id", "patent_number", "kind", "date", "title", "abstract", "cpc", "assignee"], [])
+    _write(raw / "claims.csv",
+           ["patent_id", "claim_sequence", "exemplary", "claim_text"], [])
+    _write(raw / "missing_claims_all.csv",
+           ["patent_id", "claim_sequence", "exemplary", "claim_text", "publication_number"],
+           [["5000001", "1", "TRUE", "1. A real additional patent claim.", "US5000001A"]])
+    _write(raw / "citations.csv", ["patent_id", "citation_id"], [])
+    _write(raw / "cited_patents.csv",
+           ["patent_id", "patent_number", "kind", "date", "title", "abstract"],
+           [["5000001", "5000001", "A1", "1991-03-26", "Old coil", "A real abstract."]])
+
+    stats = build(raw, out)
+    lines = [json.loads(x) for x in (out / "corpus.jsonl").read_text(encoding="utf-8").splitlines()]
+
+    assert stats["patents"] == 1
+    assert stats["with_claims"] == 1
+    assert lines[0]["id"] == "US 5,000,001"
+    assert lines[0]["claims"] == ["A real additional patent claim."]

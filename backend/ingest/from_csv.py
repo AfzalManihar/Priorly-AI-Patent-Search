@@ -59,6 +59,13 @@ def build(raw: Path, out: Path) -> dict:
         text = LEADING_NUMBER.sub("", r["claim_text"]).strip()
         if text:
             claim_rows[r["patent_id"]].append((int(r["claim_sequence"] or 0), text))
+    # Additional real claims exported separately; metadata is sourced from cited_patents.csv.
+    missing_claims_path = raw / "missing_claims_all.csv"
+    if missing_claims_path.exists():
+        for r in read(missing_claims_path):
+            text = LEADING_NUMBER.sub("", r["claim_text"]).strip()
+            if text:
+                claim_rows[r["patent_id"]].append((int(r["claim_sequence"] or 0), text))
     cites: dict[str, set[str]] = defaultdict(set)
     for r in read(raw / "citations.csv"):
         if r["citation_id"]:
@@ -69,6 +76,8 @@ def build(raw: Path, out: Path) -> dict:
     for pid in claim_rows:
         if pid in patents:
             keep[pid] = patents[pid]
+        elif pid in cited_meta:
+            keep[pid] = cited_meta[pid]
     wanted = set().union(*(cites[p] for p in query_ids)) if query_ids else set()
     for cid in wanted:
         if cid in keep:
