@@ -1,150 +1,679 @@
-# Priorly: patent prior-art search engine
+# 🔬 Priorly — AI-Powered Patent Prior-Art Search Engine
 
-Paste a patent claim. Priorly splits it into elements, searches by keyword and by meaning, merges the
-results, reranks them, and shows each hit with its matching passage, the elements it covers, and a
-trace of how it was ranked. Every retrieval layer is measured against prior art that patent examiners
-actually cited.
+<p align="center">
+  <strong>Search Beyond Keywords. Discover Relevant Prior Art.</strong>
+</p>
 
-Author: Afzal Manihar. The requirements live in the PRD (`docs/PRD.md`, text only). The full PRD with
-its diagrams and charts is the published document; its section 17 maps every requirement to code and tests,
-and section 20 lists what is built and what is not. This repository implements it.
+<p align="center">
+  An explainable, hybrid patent retrieval system that transforms patent claims into technical elements, searches by keywords and semantic meaning, combines candidate rankings, and presents relevant patent passages with claim-element coverage and ranking insights.
+</p>
 
-## Run it in two minutes
+<p align="center">
+  <a href="PENDING_DEPLOYMENT_LINK">
+    <img src="https://img.shields.io/badge/🚀_LIVE_DEMO-DEPLOYMENT_PENDING-808080?style=for-the-badge" alt="Deployment Pending">
+  </a>
+  <a href="https://github.com/AfzalManihar/Priorly-AI-Patent-Search">
+    <img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github" alt="GitHub Repository">
+  </a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Qdrant-Vector_DB-DC244C" alt="Qdrant">
+  <img src="https://img.shields.io/badge/BGE-Embeddings_%26_Reranking-6C47A6" alt="BGE">
+  <img src="https://img.shields.io/badge/Groq-LLM-orange" alt="Groq">
+  <img src="https://img.shields.io/badge/Hybrid-Retrieval-2563EB" alt="Hybrid Retrieval">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
+</p>
+
+---
+
+## 📌 Overview
+
+Patent prior-art research is challenging because technically similar inventions can be described using completely different terminology.
+
+Traditional keyword search may miss relevant documents when the wording differs. Semantic search can identify conceptual similarities, but may overlook exact technical terms and identifiers.
+
+**Priorly** addresses this retrieval challenge through a multi-stage patent search pipeline.
+
+Paste a patent claim and Priorly processes it through:
+
+- Technical claim decomposition.
+- Keyword-based BM25 retrieval.
+- Semantic dense-vector retrieval.
+- Reciprocal Rank Fusion (RRF).
+- Cross-encoder reranking.
+- Claim-element coverage analysis.
+- Passage highlighting and ranking explanations.
+
+The goal is not simply to return similar documents, but to make the retrieval process more transparent and measurable.
+
+> Priorly is a research-assistance tool. Its results are not legal determinations of patent validity, patentability, infringement, or freedom to operate.
+
+## 🎯 Project Goals
+
+- Improve patent discovery beyond exact keyword matching.
+- Combine lexical and semantic retrieval.
+- Make retrieval decisions easier to inspect and understand.
+- Evaluate retrieval using available examiner-citation relationships.
+- Provide a practical interface for patent research workflows.
+- Build a modular system that can be measured and improved stage by stage.
+
+## ✨ Key Features
+
+| Feature | Description |
+|---|---|
+| 🔍 Claim-Based Search | Search using natural-language patent claims. |
+| 🧩 Claim Decomposition | Break complex claims into smaller technical elements. |
+| 🔤 BM25 Retrieval | Retrieve documents using technical keyword relevance. |
+| 🧠 Dense Retrieval | Discover conceptually similar patent passages using embeddings. |
+| 🔀 Hybrid Retrieval | Combine lexical and semantic rankings using RRF. |
+| 🎯 Cross-Encoder Reranking | Reassess and reorder candidate passages. |
+| 💡 HyDE Query Enhancement | Support hypothetical-document-based semantic retrieval. |
+| 📍 Passage Highlighting | Highlight matching technical content. |
+| 🧩 Element Coverage | Show which claim elements are represented in retrieved passages. |
+| 🔎 Ranking Trace | Expose available retrieval and ranking signals. |
+| 🤖 AI Explanations | Generate contextual explanations using the configured LLM. |
+| 💾 Search History | Store and retrieve previous search records. |
+| 📄 PDF Reports | Generate downloadable patent-search reports. |
+| 📊 Benchmark Dashboard | Inspect configured retrieval evaluation results. |
+| 📥 CSV Export | Export supported report and benchmark data. |
+| ⚙️ Configurable Backends | Switch between offline and model-backed components. |
+| 🛡️ Application Safeguards | Apply request validation, rate limits, and security controls. |
+
+Feature availability depends on the active configuration, corpus, and connected services.
+
+## 🖥️ Live Application
+
+**Deployment status: Pending**
+
+**Live Demo:** `PENDING_DEPLOYMENT_LINK`
+
+The public deployment URL will be added after deployment and end-to-end verification.
+
+Until then, Priorly can be run locally using the installation instructions below.
+
+## 🏗️ System Architecture
+
+Priorly follows a modular retrieval architecture. Each stage has a separate responsibility, making the pipeline easier to evaluate, debug, and improve.
+
+### End-to-End Workflow
+
+```mermaid
+flowchart TD
+    A[Patent Claim] --> B[Input Validation]
+    B --> C[Claim Decomposition]
+    C --> D[Technical Claim Elements]
+    D --> E[Query Enhancement / HyDE]
+
+    E --> F[BM25 Retrieval]
+    E --> G[Dense Vector Retrieval]
+
+    F --> H[Candidate Pool]
+    G --> H
+
+    H --> I[Reciprocal Rank Fusion]
+    I --> J[Candidate Selection]
+    J --> K[Cross-Encoder Reranking]
+
+    K --> L[Ranked Patent Passages]
+    L --> M[Element Coverage]
+    L --> N[Passage Highlighting]
+    L --> O[Ranking Trace]
+    L --> P[AI-Assisted Explanation]
+
+    M --> Q[Research Results]
+    N --> Q
+    O --> Q
+    P --> Q
+
+    Q --> R[Saved Reports]
+    Q --> S[PDF / CSV Export]
+```
+
+### How the Pipeline Works
+
+**1. Claim Decomposition**
+
+The submitted claim is analyzed and separated into smaller technical elements. This helps the system search for individual concepts rather than relying only on the original sentence.
+
+**2. Query Enhancement — HyDE**
+
+Hypothetical Document Embeddings can generate an expanded technical description to support semantic retrieval.
+
+**3. Lexical Retrieval — BM25**
+
+BM25 identifies passages containing relevant technical terminology and helps preserve exact keyword matches.
+
+**4. Dense Retrieval — BGE**
+
+The BGE embedding model converts patent passages into vector representations. Qdrant supports similarity-based candidate retrieval.
+
+**5. Reciprocal Rank Fusion — RRF**
+
+RRF combines lexical and semantic rankings into a unified candidate list.
+
+**6. Cross-Encoder Reranking**
+
+A BGE cross-encoder evaluates candidate relevance more directly and reorders the retrieved passages.
+
+**7. Result Analysis**
+
+The application presents available patent information, matching passages, claim-element coverage, ranking signals, and configured AI explanations.
+
+## 🧠 Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| Python | Core application and retrieval logic |
+| FastAPI | Backend API framework |
+| HTML, CSS, JavaScript | Frontend application |
+| Sentence Transformers | Embedding and reranking integration |
+| BGE | Dense embeddings and cross-encoder reranking |
+| Qdrant | Vector database |
+| BM25 | Lexical information retrieval |
+| TF-IDF | Lightweight offline retrieval backend |
+| Reciprocal Rank Fusion | Hybrid ranking |
+| Groq | LLM inference |
+| SQLite | Application persistence and caching |
+| Pydantic | Configuration and data validation |
+| Pytest | Automated testing |
+| Docker | Containerized application support |
+| GitHub Actions | Continuous integration |
+
+### Model Configuration
+
+| Component | Model / Backend |
+|---|---|
+| Dense Embeddings | `BAAI/bge-base-en-v1.5` |
+| Cross-Encoder Reranker | `BAAI/bge-reranker-base` |
+| LLM Provider | Groq |
+| Preferred LLM Model | `openai/gpt-oss-20b` |
+| Vector Store | Qdrant |
+
+The actual model selection is controlled by environment configuration.
+
+## 🔌 Offline and Real Backends
+
+Priorly supports lightweight offline backends as well as model-backed retrieval.
+
+| Configuration | Offline Backend | Real Backend |
+|---|---|---|
+| `DENSE_BACKEND` | `tfidf` | `bge` |
+| `RERANK_BACKEND` | `lexical` | `bge` |
+| `LLM_BACKEND` | `heuristic` | `groq` |
+
+### Offline Mode
+
+Offline mode uses:
+
+- TF-IDF instead of BGE semantic embeddings.
+- Lexical scoring instead of cross-encoder reranking.
+- Rule-based decomposition and templated explanations instead of live LLM inference.
+
+This mode is useful for development and automated testing. It should not be interpreted as full semantic retrieval or real LLM inference.
+
+### Real Model Mode
+
+The model-backed configuration enables:
+
+- BGE dense embeddings.
+- Qdrant vector retrieval.
+- BGE cross-encoder reranking.
+- Groq-based claim decomposition, query enhancement, and explanations.
+
+Real model execution requires the appropriate dependencies, model availability, hardware resources, and provider configuration.
+
+## 📚 Patent Data and Benchmarking
+
+Priorly is designed to evaluate patent retrieval against available prior-art relationships, including examiner-cited patent references.
+
+### Why Examiner Citations?
+
+Examiner citations provide useful relevance signals for patent retrieval research.
+
+They help construct evaluation queries and ground-truth relationships from patent examination records rather than relying entirely on manually invented examples.
+
+However, examiner citations are incomplete. A document that was not cited is not necessarily irrelevant.
+
+**Benchmark scores therefore represent retrieval performance against the available citation ground truth, not absolute patent-relevance accuracy.**
+
+### Data Preparation Workflow
+
+```mermaid
+flowchart TD
+    A[Patent Source Data] --> B[Patent Records]
+    A --> C[Claims and Abstracts]
+    A --> D[Citation Relationships]
+
+    B --> E[Corpus Builder]
+    C --> E
+    D --> F[Ground Truth]
+
+    E --> G[Patent Corpus]
+    G --> H[Query Builder]
+    F --> H
+
+    H --> I[Development Split]
+    H --> J[Validation Split]
+    H --> K[Test Split]
+
+    I --> L[Retrieval Evaluation]
+    J --> L
+    K --> L
+
+    L --> M[Benchmark Report]
+```
+
+### Evaluation Leakage Controls
+
+The evaluation workflow is designed to apply these safeguards:
+
+- A query patent must not appear in its own retrieved results.
+- Retrieved patents must satisfy the configured earlier-year restriction.
+- Development data is used for tuning.
+- Validation data is used for model and configuration selection.
+- Test data is reserved for final reporting.
+
+These controls help reduce evaluation leakage and make retrieval measurements more meaningful.
+
+## 📊 Evaluation Metrics
+
+The evaluation framework supports information retrieval metrics including:
+
+| Metric | Purpose |
+|---|---|
+| Precision@K | Measures relevant documents among the top K results. |
+| Recall@K | Measures how many known relevant documents are retrieved. |
+| MRR | Measures the position of the first relevant result. |
+| nDCG@K | Measures ranking quality with position-sensitive relevance. |
+| Bootstrap Confidence Intervals | Estimates uncertainty around measured metrics. |
+
+### Stage-Level Evaluation
+
+The modular pipeline supports comparisons across retrieval stages:
+
+- Dense retrieval.
+- Hybrid retrieval.
+- Reranking.
+- Configurable stage skipping.
+- Development, validation, and test splits.
+
+Actual metric values should be generated using the configured real corpus and benchmark. Sample-corpus metrics must not be presented as real-world patent retrieval performance.
+
+## 📄 Reports and Data Management
+
+| Capability | Description |
+|---|---|
+| Search History | Store and retrieve previous search records. |
+| Saved Reports | Save selected patent-search results. |
+| PDF Export | Generate downloadable PDF reports. |
+| CSV Export | Export supported report and benchmark information. |
+| SQLite Storage | Persist application records and LLM cache. |
+| Search Deletion | Delete an individual stored search where supported. |
+| Data Erasure | Clear configured stored application data through the deletion workflow. |
+
+Claims and search records should be handled according to the application's configured privacy and retention behaviour.
+
+## ⚙️ Installation and Setup
+
+### Requirements
+
+- Python 3.10 or newer.
+- Git.
+- Windows, macOS, or Linux.
+- Sufficient RAM and disk space for selected models and patent data.
+- Docker only for the containerized workflow.
+- Groq API key only when using the Groq backend.
+
+### 1. Clone the Repository
 
 ```bash
-make setup          # pip install -r backend/requirements-dev.txt
-make serve          # API + UI at http://localhost:8000
+git clone https://github.com/AfzalManihar/Priorly-AI-Patent-Search.git
+cd Priorly-AI-Patent-Search
 ```
 
-Open http://localhost:8000. The landing page is `index.html`, the app is `app.html`.
-No API keys, no model downloads: the default backends are offline stand-ins (see "Backends").
+### 2. Create the Environment
+
+**Recommended:**
 
 ```bash
-make test           # 60 tests
-make eval           # re-run the benchmark on the configured corpus
-docker compose up --build    # same thing in containers, plus a Qdrant service
+make setup
 ```
 
-## What is here
+**Windows PowerShell alternative:**
 
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r backend/requirements-dev.txt
 ```
+
+### 3. Start Priorly
+
+```bash
+make serve
+```
+
+Open the application:
+
+```text
+http://localhost:8000
+```
+
+Available pages:
+
+| Page | URL |
+|---|---|
+| Landing Page | `http://localhost:8000/` |
+| Search Workspace | `http://localhost:8000/app.html` |
+| API Documentation | `http://localhost:8000/docs` |
+
+### 4. Run Automated Tests
+
+```bash
+make test
+```
+
+### 5. Run the Benchmark
+
+```bash
+make eval
+```
+
+The benchmark uses the corpus and benchmark paths configured for the application.
+
+### 6. Run with Docker
+
+```bash
+docker compose up --build
+```
+
+The Docker workflow is intended to run the application with its configured Qdrant service.
+
+## ⚙️ Configuring Real Models
+
+Install the ML dependencies:
+
+```bash
+make setup-ml
+```
+
+Create a local environment file:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Configure the required values in `.env`:
+
+```dotenv
+DENSE_BACKEND=bge
+RERANK_BACKEND=bge
+LLM_BACKEND=groq
+
+GROQ_API_KEY=
+GROQ_MODEL=openai/gpt-oss-20b
+
+EMBED_MODEL=BAAI/bge-base-en-v1.5
+RERANK_MODEL=BAAI/bge-reranker-base
+
+QDRANT_URL=:memory:
+```
+
+For a persistent local Qdrant server, configure its reachable URL instead:
+
+```dotenv
+QDRANT_URL=http://localhost:6333
+```
+
+Start Qdrant separately if using the server URL:
+
+```bash
+docker run -p 6333:6333 qdrant/qdrant
+```
+
+**Important:** Real model configuration can require model downloads, RAM, disk space, internet connectivity, and provider quota. Offline tests do not validate live integrations.
+
+Never commit `.env` or actual API credentials.
+
+## 🧪 Testing and Verification
+
+Priorly includes automated tests covering:
+
+- Retrieval pipeline components.
+- Claim decomposition and pipeline stages.
+- API endpoints and error handling.
+- Search validation and rate limiting.
+- Server-sent event streaming.
+- Report generation and export.
+- Application settings.
+- Qdrant retrieval code paths.
+- Ingestion and query-building workflows.
+- Evaluation metrics and leakage controls.
+- Production-oriented application behaviour.
+
+Run the test suite:
+
+```bash
+make test
+```
+
+Run additional checks:
+
+```bash
+make check
+```
+
+### Testing Integrity
+
+| Test Type | What It Validates |
+|---|---|
+| Unit Tests | Individual application components. |
+| Mocked Integration Tests | Application logic against simulated dependencies. |
+| Offline Pipeline Tests | Retrieval stages using offline backends. |
+| Real Model Tests | Actual inference using selected models. |
+| Live API Tests | External provider connectivity and responses. |
+| Real Corpus Evaluation | Retrieval against configured real benchmark data. |
+| Browser Testing | Actual interface behaviour in a browser. |
+
+Passing mocked or offline tests does not prove that live model inference, external APIs, or production deployment are working.
+
+## 🔐 Security, Privacy and Reliability
+
+Priorly includes application-level safeguards such as:
+
+- Request validation.
+- Configurable rate limiting.
+- Security response headers.
+- API error handling.
+- Configurable provider credentials.
+- Protection against returning provider API keys through application endpoints.
+- Search history and data deletion controls.
+- SQLite-backed application storage.
+- Request tracing and application metrics.
+
+Production deployment should use HTTPS, secure environment configuration, database protection, and operational monitoring.
+
+Never commit:
+
+- `.env` files.
+- API keys or credentials.
+- Private datasets and raw patent data.
+- Local databases and vector-store files.
+- Virtual environments and generated caches.
+
+## 📈 Observability
+
+| Endpoint / Feature | Purpose |
+|---|---|
+| `GET /api/health` | Application health information. |
+| `GET /api/metrics` | Configured application metrics. |
+| Request Logs | Request identifiers, status, and timing. |
+| Search Logs | Search-stage timings and degraded-stage information. |
+| LLM Cache | Cache-related usage information. |
+
+Performance targets must be measured on the intended deployment and corpus before being reported as achieved.
+
+## 🔗 API Reference
+
+The documented API surface includes:
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/search` | Execute patent search. |
+| `POST` | `/api/search/stream` | Stream search progress and results. |
+| `GET` | `/api/search/{id}` | Retrieve a stored search. |
+| `DELETE` | `/api/search/{id}` | Delete a stored search. |
+| `DELETE` | `/api/data?confirm=yes` | Delete configured stored data. |
+| `GET` | `/api/benchmark` | Retrieve benchmark information. |
+| `GET` | `/api/reports` | List saved reports. |
+| `POST` | `/api/reports` | Save a report. |
+| `GET` | `/api/reports/{id}/export.csv` | Export a report as CSV. |
+| `GET` | `/api/reports/{id}/export.pdf` | Export a report as PDF. |
+| `GET` | `/api/settings` | Retrieve application settings. |
+| `PUT` | `/api/settings` | Update supported settings. |
+| `GET` | `/api/health` | Health information. |
+| `GET` | `/api/metrics` | Application metrics. |
+
+The interactive API documentation at `/docs` is the authoritative reference for the running application's routes and schemas.
+
+## 📁 Project Structure
+
+```text
 priorly/
-  frontend/                 landing page + workspace (plain HTML, CSS, JS, no build step)
-    js/api.js               API client (search stream, reports, benchmark, settings)
-    js/app.js               UI logic; falls back to built-in demo data if the API is down
-  backend/
-    app/                    FastAPI service and pipeline
-      pipeline.py           decompose, HyDE, retrieve, fuse, rerank, explain (PRD section 8)
-      retrievers.py         BM25, TF-IDF stand-in, Qdrant + BGE dense retriever
-      fusion.py             Reciprocal Rank Fusion
-      rerank.py             lexical scorer, BGE cross-encoder
-      llm.py                rule-based LLM stand-in, Groq client with SQLite cache
-      highlight.py          HTML-safe passage highlighting per claim element
-      main.py               endpoints, error model, rate limit, SSE stream, CSV export
-      store.py              SQLite: search log, reports, settings, LLM cache
-    ingest/
-      make_sample_data.py   bundled fictional sample corpus and queries
-      download.py           PatentsView bulk download
-      build_corpus.py       PatentsView tables to corpus.jsonl + examiner citations
-    eval/
-      build_queries.py      query set with dev/val/test splits and ground truth
-      run_eval.py           benchmark harness (writes the file the Benchmark page reads)
-      metrics.py            Recall@k, Precision@k, MRR, bootstrap CI
-    tests/                  60 tests (units, pipeline, API contract, ingest, eval, Qdrant path, production behaviour)
-  docker-compose.yml  Makefile  .env.example  .github/workflows/ci.yml
+│
+├── frontend/
+│   ├── index.html
+│   ├── app.html
+│   ├── css/
+│   └── js/
+│       ├── api.js
+│       ├── app.js
+│       └── data.js
+│
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── pipeline.py
+│   │   ├── retrievers.py
+│   │   ├── fusion.py
+│   │   ├── rerank.py
+│   │   ├── llm.py
+│   │   ├── highlight.py
+│   │   ├── report_pdf.py
+│   │   ├── corpus.py
+│   │   ├── config.py
+│   │   ├── store.py
+│   │   └── live_patent_search.py
+│   │
+│   ├── ingest/
+│   ├── eval/
+│   ├── tests/
+│   └── requirements-dev.txt
+│
+├── docs/
+│   └── PRD.md
+│
+├── .github/
+│   └── workflows/
+│
+├── .env.example
+├── Makefile
+├── docker-compose.yml
+├── Dockerfile
+└── README.md
 ```
 
-## Backends
+This is a representative layout. The actual repository tree is authoritative.
 
-| Setting | Default (offline) | Real configuration |
-| --- | --- | --- |
-| `DENSE_BACKEND` | `tfidf`: lexical stand-in, no download | `bge`: BGE embeddings stored in Qdrant |
-| `RERANK_BACKEND` | `lexical`: token overlap scorer | `bge`: BGE cross-encoder |
-| `LLM_BACKEND` | `heuristic`: rule-based decomposition, templated reasons | `groq`: decomposition, HyDE, grounded explanations |
+## 📋 Product Requirements Document
 
-The defaults let everything run anywhere, but they are not semantic. The paraphrase advantage of
-vector search, and the value of HyDE and a cross-encoder, only show up with the real backends:
+Priorly's product requirements are documented in:
 
-```bash
-make setup-ml                              # installs sentence-transformers
-cp .env.example .env                       # then edit
-#   DENSE_BACKEND=bge  RERANK_BACKEND=bge  LLM_BACKEND=groq  GROQ_API_KEY=...
-#   QDRANT_URL=http://localhost:6333       (docker run -p 6333:6333 qdrant/qdrant)
-```
+`docs/PRD.md`
 
-## Using real data (PRD section 7)
+The PRD defines the intended system behaviour, functional requirements, non-functional requirements, and implementation mapping.
 
-```bash
-cd backend
-python -m ingest.download --years 2015 2016 2017 --out data/raw
-python -m ingest.build_corpus --raw data/raw --check          # print table headers, verify column names
-python -m ingest.build_corpus --raw data/raw --cpc "H02J 50" --out data/real --max-query-patents 300
-python -m eval.build_queries --corpus data/real/corpus.jsonl --citations data/real/citations.json \
-        --out data/real/queries.json --version v1
-export CORPUS_PATH=data/real/corpus.jsonl BENCHMARK_PATH=data/real/benchmark.json
-python -m eval.run_eval --queries data/real/queries.json --split test
-```
+Important sections:
 
-Leakage controls are built into the harness: a query patent never appears in its own results, and only
-patents from an earlier year can be returned. Tune on the `dev` split, choose on `val`, and report `test`
-once per release. Examiner citations are an incomplete record of relevance, so every number is a lower bound.
+- **Section 17:** Requirement-to-code-and-test traceability.
+- **Section 20:** Implemented and outstanding requirements.
 
-## What is verified, and what is not
+The published PRD includes diagrams and charts. The repository contains the text-only PRD reference.
 
-Verified here (by the test suite and a real-browser run): the full pipeline on the sample corpus, every
-API endpoint and error code, stage switches, leakage controls, degraded-run behaviour, rate limiting, SSE
-streaming, reports and CSV export, settings, the Qdrant code path (in memory, with a hash embedder),
-the ingest and query-building scripts on a small synthetic PatentsView-style fixture, and the UI in
-Chromium at desktop and phone widths in light and dark themes.
+Implementation status should be checked against the current code and tests, rather than inferred solely from the specification.
 
-Not verified, so check these before relying on them:
+## 🚧 Development and Verification Status
 
-- **Sample numbers mean nothing.** The bundled corpus is 31 invented patents and 6 queries. Even the
-  benchmark file says "SAMPLE DATA". The Benchmark page shows real lift only after you run the harness on real data.
-- **Landing page numbers are placeholders.** The bars on `index.html` come from `frontend/js/data.js`.
-  Replace them with your measured results before showing the page to anyone.
-- **`ingest/download.py` and the PatentsView column names** follow the published layout as remembered
-  when this project was generated. They were not run against the live site. Use `--check` and edit `COLUMNS`
-  in `build_corpus.py` if the headers differ.
-- **BGE embeddings, the BGE cross-encoder, and Groq** were not run (no model downloads or API key here).
-  The Groq client is tested with a mocked transport; the BGE classes are thin wrappers over sentence-transformers.
-- **Latency and accessibility targets** from the PRD (p95 under 8 s, audit score 95) are not measured against real data.
-- **The container image** was not built here (no Docker daemon was available). The Dockerfile and compose file follow the same steps as `make setup` and `make serve`, which were run.
+| Area | Status |
+|---|---|
+| FastAPI application | Implemented |
+| Patent claim search pipeline | Implemented |
+| Claim decomposition | Implemented |
+| BM25 retrieval | Implemented |
+| Dense retrieval integration | Implemented |
+| Reciprocal Rank Fusion | Implemented |
+| Cross-encoder reranking | Implemented |
+| AI-assisted explanations | Implemented |
+| Passage highlighting | Implemented |
+| Benchmark evaluation framework | Implemented |
+| Search history and saved reports | Implemented; final verification required |
+| PDF and CSV export | Implemented; final verification required |
+| Production deployment | Pending |
+| External live patent search | Not yet verified |
 
-## PRD coverage
+This status is not a claim of complete production readiness. Outstanding integrations and deployment workflows require separate verification.
 
-Every requirement in the PRD (FR-01 to FR-23, NFR-01 to NFR-14) has an implementation. Section 17 of the PRD
-maps each one to its module and test. The items that need a measurement before they can be called done:
+## 🗺️ Roadmap
 
-| PRD item | State |
-| --- | --- |
-| FR-14 report export | CSV and PDF, both built and tested |
-| FR-19 benchmark CSV export | Built in the UI (downloads the stage table) |
-| NFR-08 delete stored claims | `DELETE /api/search/{id}` and `DELETE /api/data?confirm=yes`, plus an Erase button in Settings |
-| NFR-09 observability | Per-search timings and LLM cache hit rate in the log line; `GET /api/metrics` for latency percentiles, errors and cache |
-| NFR-01 and NFR-02 latency | Measured per stage by `/api/metrics`; the target itself is unmeasured until the real corpus is loaded |
-| NFR-13 accessibility | Built to the standard; the automated audit score is not measured |
-| Passage location | Paragraph references (`Paragraph [0042]`), as the PRD specifies |
-| Model and key settings | Editable in the UI; model changes apply after an API restart |
+- Complete final report and export verification.
+- Verify clean installation and end-to-end workflows.
+- Complete real-corpus retrieval evaluation and record measured metrics.
+- Improve indexing and retrieval performance for larger corpora.
+- Expand verified patent-data coverage.
+- Integrate a reliable, free public live-patent search source where access permits.
+- Complete production deployment.
+- Add the verified public deployment URL and screenshots.
+- Update documentation with final measured performance.
 
-## Operating it
+## ⚠️ Limitations and Responsible Use
 
-| Concern | How |
-| --- | --- |
-| Health | `GET /api/health` (container health check uses it) |
-| Metrics | `GET /api/metrics`: searches, degraded runs, p50 and p95 latency, per-stage p95, errors by status, LLM cache hit rate, stored counts |
-| Logs | One line per request (id, path, status, ms) and one per search (timings, degraded stages, cache). Set `LOG_LEVEL`. Send `X-Request-ID` to trace a call end to end |
-| Security headers | CSP, frame denial, no sniffing, no referrer on every response |
-| Privacy | Claims are stored for replay and reports only. Erase one search, or everything, at any time. The provider key is never returned by any endpoint |
-| Containers | Unprivileged user, health check, restart policy, named volumes for the database and vector index |
-| CI | `.github/workflows/ci.yml` runs the tests on Python 3.11 and 3.12 and syntax-checks the front end. `make check` does the same locally |
-| Behind a proxy | The container starts uvicorn with `--proxy-headers`; put TLS in front of it and set `CORS_ORIGINS` only if the front end is hosted elsewhere |
+- Search results are limited to the configured patent corpus.
+- A local corpus is not a complete or continuously updated patent database.
+- Examiner citations provide incomplete relevance ground truth.
+- Similarity scores are not probabilities of patentability.
+- A technically similar document is not automatically legally relevant prior art.
+- AI-generated explanations can contain errors.
+- External live patent-source access is not currently verified.
+- Model performance depends on configuration, hardware, and provider availability.
+- Production latency, accessibility, and reliability targets must be measured before being claimed.
 
-## API summary (PRD section 10)
+Priorly supports research and discovery. It does not replace a registered patent professional or a legal assessment.
 
-`POST /api/search`, `POST /api/search/stream` (server-sent events), `GET|DELETE /api/search/{id}`,
-`DELETE /api/data?confirm=yes`, `GET /api/benchmark`, `GET|POST /api/reports`,
-`GET /api/reports/{id}/export.csv`, `GET /api/reports/{id}/export.pdf`, `GET|PUT /api/settings`,
-`GET /api/health`, `GET /api/metrics`. Interactive docs at `/docs` while the server runs.
-Result fields: `id, title, assignee, year, cpc, el, dense, bm25, rrf_rank, rerank_rank, score,
-score_kind, loc, passage, why, missed_by_vector`.
+## 👨‍💻 Author
+
+**Afzal Manihar**
+
+Interested in Data Science, Machine Learning, Generative AI, Agentic AI, and building practical AI-powered systems.
+
+- 🌐 **Portfolio:** https://afzalmanihar.github.io
+- 💻 **GitHub:** https://github.com/AfzalManihar
+- 🔗 **LinkedIn:** https://www.linkedin.com/in/afzal-manihar-bb0183308/
+- 📦 **Repository:** https://github.com/AfzalManihar/Priorly-AI-Patent-Search
+
+## 📄 License
+
+See the `LICENSE` file in the repository for the applicable license.
+
+---
+
+<p align="center">
+  <strong>Priorly — Making Patent Prior-Art Discovery More Intelligent, Explainable, and Measurable.</strong>
+</p>
+
+<p align="center">
+  ⭐ If you find this project interesting, consider starring the repository!
+</p>
