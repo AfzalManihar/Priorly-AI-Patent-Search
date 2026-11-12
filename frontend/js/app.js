@@ -474,7 +474,7 @@
         return "<tr><td>" + esc(r.type) + '</td><td class="num">' + r.n + '</td><td class="num' + (r.dense < 0.2 ? " bad" : "") + '">' + r.dense.toFixed(2) + '</td><td class="num">' + r.hybrid.toFixed(2) + '</td><td class="num"><b>' + r.full.toFixed(2) + '</b></td><td class="num ' + (lift >= 0 ? "good" : "bad") + '">' + (lift >= 0 ? "+" : "") + lift + " pts</td></tr>";
       }).join("") + "</tbody>";
     var names = ["BM25 and RRF fusion", "Cross-encoder rerank", "Claim decomposition and HyDE"];
-    $("#ablation").innerHTML = names.map(function (n, i) {
+    $("#ablation").innerHTML = names.slice(0, Math.max(0, st.length - 1)).map(function (n, i) {
       var d = Math.round((st[i + 1].recall - st[i].recall) * 100);
       return '<div class="item"><div><b>' + n + "</b><small>Recall@" + ev.k + " moved from " + st[i].recall.toFixed(2) + " to " + st[i + 1].recall.toFixed(2) +
         '</small></div><span class="' + (d >= 0 ? "good" : "bad") + '">' + (d >= 0 ? "+" : "") + d + " pts</span></div>";
