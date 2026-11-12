@@ -456,7 +456,17 @@
   }
 
   function drawEval() {
-    var ev = curEval, st = ev.stages, first = st[0], last = st[st.length - 1];
+    var ev = curEval, st = Array.isArray(curEval.stages) ? curEval.stages : [];
+    if (!st.length) {
+      $("#evalSub").textContent = "No evaluation stages are available for this benchmark.";
+      $("#metrics").innerHTML = "";
+      $("#chartHost").innerHTML = '<div class="empty">No benchmark stage data available.</div>';
+      $("#typeTable").innerHTML = "";
+      $("#ablation").innerHTML = "";
+      $("#evalNote").textContent = ev.note || "";
+      return;
+    }
+    var first = st[0], last = st[st.length - 1];
     var pts = function (a, b) {
       var d = Math.round((a - b) * 100);
       return '<span class="' + (d < 0 ? "neg" : "") + '">' + (d >= 0 ? "+" : "") + d + " pts vs dense only</span>";
