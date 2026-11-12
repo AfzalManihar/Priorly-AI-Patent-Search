@@ -121,7 +121,7 @@ def build_report_pdf(report: dict, search: dict) -> bytes:
         block = [
             Paragraph(f"<b>{rank}. {_text(r['title'])}</b>{_text(mark)}", body),
             Paragraph(_text(f"{r['id']}  |  {r['assignee']}  |  {r['year']}  |  {r['cpc']}"), small),
-            Paragraph(_text(f"Elements covered: {covered}  |  Score {r['score']:.2f}  |  {r['loc']}"
+            Paragraph(_text(f"Scorer-matched elements: {covered}  |  Score {r['score']:.2f}  |  {r['loc']}"
                             + ("  |  Found by keyword search only" if r.get("missed_by_vector") else "")), small),
             Spacer(1, 2),
             Paragraph(_text(r["passage"]), passage),
