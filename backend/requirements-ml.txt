@@ -1,3 +1,4 @@
 # Needed only for DENSE_BACKEND=bge and RERANK_BACKEND=bge (downloads models on first use).
 -r requirements.txt
 sentence-transformers>=3.0
+usearch>=2.26.6

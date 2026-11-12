@@ -11,6 +11,9 @@ Dense backends
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+from pathlib import Path
 from dataclasses import dataclass
 
 import numpy as np
@@ -82,6 +85,147 @@ class BM25Index:
             for token, (indices, freqs) in postings.items()
         }
         self.doc_len = np.asarray(self.bm25.doc_len, dtype=float)
+
+    def _ensure_usearch_index(self) -> None:
+        """Build or restore a persistent ANN index for local Qdrant data."""
+        if not hasattr(self, "local_path"):
+            self.fast_index = None
+            return
+
+        try:
+            from usearch.index import Index
+        except ImportError as exc:
+            raise DependencyError("usearch is required for local BGE search") from exc
+
+        total = len(self.corpus.chunks)
+        dimension = int(self.embedder.dim)
+        index_path = self.local_path / f"{self.collection}.usearch"
+        meta_path = self.local_path / f"{self.collection}.usearch.json"
+        self.local_path.mkdir(parents=True, exist_ok=True)
+
+        expected = {
+            "collection": self.collection,
+            "count": total,
+            "dimension": dimension,
+            "first_id": int(self.corpus.chunks[0].idx) if total else None,
+            "last_id": int(self.corpus.chunks[-1].idx) if total else None,
+        }
+
+        if index_path.exists() and meta_path.exists():
+            try:
+                metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+                if metadata == expected:
+                    restored = Index.restore(str(index_path))
+                    if restored.size == total and restored.ndim == dimension:
+                        self.fast_index = restored
+                        print(
+                            f"USearch index restored: {restored.size} vectors",
+                            flush=True,
+                        )
+                        return
+            except Exception:
+                pass
+
+        print("Building persistent USearch index from existing Qdrant vectors...", flush=True)
+        index = Index(
+            ndim=dimension,
+            metric="cos",
+            dtype="f32",
+            connectivity=16,
+            expansion_add=128,
+            expansion_search=64,
+        )
+
+        offset = None
+        indexed = 0
+        while True:
+            records, offset = self.client.scroll(
+                collection_name=self.collection,
+                limit=1024,
+                offset=offset,
+                with_payload=False,
+                with_vectors=True,
+            )
+            if not records:
+                break
+
+            keys = []
+            vectors = []
+            for record in records:
+                vector = record.vector
+                if isinstance(vector, dict):
+                    vector = next(iter(vector.values()))
+                if vector is None:
+                    raise DependencyError(
+                        f"Qdrant point {record.id} has no vector"
+                    )
+                keys.append(int(record.id))
+                vectors.append(vector)
+
+            index.add(
+                keys=np.asarray(keys, dtype=np.uint64),
+                vectors=np.asarray(vectors, dtype=np.float32),
+            )
+            indexed += len(keys)
+
+            if indexed % 10240 < len(keys) or offset is None:
+                print(
+                    f"USearch migration: {indexed}/{total} vectors",
+                    flush=True,
+                )
+            if offset is None:
+                break
+
+        if indexed != total or index.size != total:
+            raise DependencyError(
+                f"USearch migration incomplete: {indexed}/{total} vectors"
+            )
+
+        temp_path = index_path.with_suffix(".usearch.tmp")
+        index.save(str(temp_path))
+        os.replace(temp_path, index_path)
+        meta_path.write_text(
+            json.dumps(expected, indent=2),
+            encoding="utf-8",
+        )
+        self.fast_index = index
+        print(f"USearch index ready: {index.size} vectors", flush=True)
+
+    def _search_usearch(
+        self,
+        vector: list[float],
+        n: int,
+        cons: Constraints,
+    ) -> list[tuple[int, float]]:
+        total = self.fast_index.size
+        fetch = min(total, max(n * 8, 128))
+        accepted = []
+
+        while True:
+            matches = self.fast_index.search(
+                np.asarray(vector, dtype=np.float32),
+                count=fetch,
+            )
+            accepted = []
+            for key, distance in zip(matches.keys, matches.distances):
+                chunk_id = int(key)
+                if chunk_id < 0 or chunk_id >= len(self.corpus.chunks):
+                    continue
+                chunk = self.corpus.chunks[chunk_id]
+                patent = self.corpus.patents[chunk.patent_id]
+
+                if cons.max_year is not None and patent.year > cons.max_year:
+                    continue
+                if chunk.patent_id in cons.exclude_ids:
+                    continue
+
+                accepted.append((chunk_id, float(1.0 - distance)))
+                if len(accepted) >= n:
+                    break
+
+            if len(accepted) >= n or fetch >= total:
+                return accepted[:n]
+            fetch = min(total, fetch * 2)
 
     def search(
         self,
@@ -249,6 +393,7 @@ class QdrantDense:
         self.corpus = corpus
         self.embedder = embedder
         self.collection = collection
+        self.fast_index = None
 
         try:
             if url == ":memory:":
@@ -257,8 +402,10 @@ class QdrantDense:
                 self.client = QdrantClient(url=url)
             else:
                 self.client = QdrantClient(path=url)
+                self.local_path = Path(url)
 
             self.ensure_index()
+            self._ensure_usearch_index()
 
         except DependencyError:
             raise
@@ -367,12 +514,156 @@ class QdrantDense:
                 f"{final_count}/{total} points"
             )
 
+
+    def _ensure_usearch_index(self) -> None:
+        if not hasattr(self, "local_path"):
+            return
+
+        from usearch.index import Index
+
+        total = len(self.corpus.chunks)
+        dim = int(self.embedder.dim)
+        self.local_path.mkdir(parents=True, exist_ok=True)
+
+        index_path = self.local_path / f"{self.collection}.usearch"
+        meta_path = self.local_path / f"{self.collection}.usearch.json"
+        expected = {
+            "count": total,
+            "dimension": dim,
+            "collection": self.collection,
+            "model": getattr(self.embedder, "model_name", type(self.embedder).__name__),
+        }
+
+        if index_path.is_file() and meta_path.is_file():
+            try:
+                metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+                if all(metadata.get(k) == v for k, v in expected.items()):
+                    self.fast_index = Index.restore(str(index_path))
+                    print(f"USearch restored: {total:,} vectors", flush=True)
+                    return
+            except Exception:
+                self.fast_index = None
+
+        index = Index(
+            ndim=dim, metric="cos",
+            connectivity=32, expansion_add=128, expansion_search=64,
+        )
+
+        offset = None
+        indexed = 0
+
+        while True:
+            records, next_offset = self.client.scroll(
+                collection_name=self.collection,
+                limit=512,
+                offset=offset,
+                with_payload=True,
+                with_vectors=True,
+            )
+            if not records:
+                break
+
+            keys, vectors = [], []
+            for record in records:
+                if record.vector is None:
+                    continue
+                vector = record.vector
+                if isinstance(vector, dict):
+                    vector = next(iter(vector.values()))
+                keys.append(int(record.id))
+                vectors.append(vector)
+
+            if vectors:
+                index.add(
+                    np.asarray(keys, dtype=np.int64),
+                    np.asarray(vectors, dtype=np.float32),
+                )
+                indexed += len(keys)
+
+            if indexed and indexed % 10000 < 512:
+                print(f"USearch build: {indexed:,}/{total:,}", flush=True)
+
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        if indexed != total:
+            raise DependencyError(
+                f"USearch build incomplete: {indexed}/{total}"
+            )
+
+        index.save(str(index_path))
+        temp_meta = meta_path.with_suffix(".json.tmp")
+        temp_meta.write_text(json.dumps(expected), encoding="utf-8")
+        os.replace(temp_meta, meta_path)
+
+        self.fast_index = index
+        print(f"USearch ready: {indexed:,} vectors", flush=True)
+
+    def _search_usearch(self, vector, n, cons):
+        if n <= 0:
+            return []
+
+        chunk_meta = {
+            int(chunk.idx): (
+                chunk.patent_id,
+                self.corpus.patents[chunk.patent_id].year,
+            )
+            for chunk in self.corpus.chunks
+        }
+
+        total = len(chunk_meta)
+        candidate_count = min(total, max(n * 20, 200))
+        accepted = []
+
+        while candidate_count:
+            matches = self.fast_index.search(
+                np.asarray(vector, dtype=np.float32),
+                count=candidate_count,
+            )
+            accepted = []
+
+            for key, distance in zip(matches.keys, matches.distances):
+                chunk_id = int(key)
+                metadata = chunk_meta.get(chunk_id)
+                if metadata is None:
+                    continue
+
+                patent_id, year = metadata
+                if patent_id in cons.exclude_ids:
+                    continue
+                if cons.max_year is not None and year > cons.max_year:
+                    continue
+
+                accepted.append((chunk_id, float(1.0 - distance)))
+                if len(accepted) >= n:
+                    break
+
+            if len(accepted) >= n or candidate_count >= total:
+                break
+            candidate_count = min(total, candidate_count * 2)
+
+        accepted.sort(key=lambda item: item[1], reverse=True)
+        return accepted[:n]
+
     def search(
         self,
         query: str,
         n: int,
         cons: Constraints,
     ) -> list[tuple[int, float]]:
+        if self.fast_index is not None:
+            try:
+                vector = self.embedder.encode(
+                    [query],
+                    is_query=True,
+                )[0].tolist()
+                return self._search_usearch(vector, n, cons)
+            except Exception as exc:
+                raise DependencyError(
+                    f"USearch unavailable: {type(exc).__name__}"
+                ) from exc
+
         m = self.models
         must = []
         must_not = []

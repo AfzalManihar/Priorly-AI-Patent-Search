@@ -55,7 +55,7 @@ class CrossEncoderScorer:
             return []
         missing = list(dict.fromkeys(p for p in pairs if p not in self._cache))
         if missing:
-            logits = self.model.predict(missing, batch_size=16)
+            logits = self.model.predict(missing, batch_size=4)
             for pair, x in zip(missing, logits):
                 self._cache[pair] = 1.0 / (1.0 + math.exp(-float(x)))
         return [self._cache[p] for p in pairs]

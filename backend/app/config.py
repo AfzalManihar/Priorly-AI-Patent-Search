@@ -45,7 +45,7 @@ class Settings:
     qdrant_url: str = ":memory:"
     qdrant_collection: str = "priorly_chunks"
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-20b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
 
     # Pipeline parameters (runtime editable through PUT /api/settings)
@@ -79,7 +79,7 @@ class Settings:
             qdrant_url=_env("QDRANT_URL", ":memory:"),
             qdrant_collection=_env("QDRANT_COLLECTION", "priorly_chunks"),
             groq_api_key=_env("GROQ_API_KEY", ""),
-            groq_model=_env("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            groq_model=_env("GROQ_MODEL", "openai/gpt-oss-20b"),
             groq_base_url=_env("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
             rrf_k=int(_env("RRF_K", "60")),
             candidates=int(_env("CANDIDATES", "50")),
