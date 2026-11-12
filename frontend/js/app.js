@@ -268,6 +268,8 @@
     if (o.rerank) parts.push("rerank");
     var head = '<div class="resbar"><h3>Prior art</h3><span>Top ' + res.shown.length + (res.meta ? "" : " of " + res.all.length) +
       " &middot; " + parts.join(", ") + '</span><button class="btn sm" id="saveReport"><span>' + icon("bookmark") + "</span>Save report</button></div>";
+    var liveQuery = encodeURIComponent(claim.value.trim());
+    head += '<div class="notice" style="margin-bottom:12px"><b>Search live patent databases</b><p style="margin:6px 0 10px">These searches open external patent databases; results are not included in Priorly\'s local ranking.</p><a class="btn sm" href="https://patents.google.com/?q=' + liveQuery + '" target="_blank" rel="noopener noreferrer">Google Patents ?</a> <a class="btn sm" href="https://worldwide.espacenet.com/patent/search?q=' + liveQuery + '" target="_blank" rel="noopener noreferrer">Espacenet ?</a></div>';
     if (res.degraded.length) {
       head = '<div class="notice" role="status"><b>Degraded run.</b> These stages fell back: ' + esc(res.degraded.join(", ")) +
         ". Results are still ranked, but quality may be lower.</div>" + head;
