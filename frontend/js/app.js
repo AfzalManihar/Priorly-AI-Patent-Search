@@ -452,7 +452,7 @@
 
     if (res.elements.length === 1 && res.elements[0].whole_claim) {
       $("#coverage").innerHTML =
-        '<p style="color:var(--ink3);font-size:13.5px">Coverage is reported when the claim is decomposed.</p>';
+        '<p style="color:var(--ink3);font-size:13.5px">Element match signals are shown when the claim is decomposed.</p>';
       return;
     }
 
@@ -468,7 +468,7 @@
         Math.round(c / Math.max(n, 1) * 100) +
         '%"></i></div><span>' + c + "/" + n + "</span></div>";
     }).join("") +
-      '<p style="font-size:12.5px;color:var(--ink3);margin-top:8px">Results that cover each element.</p>';
+      '<p style="font-size:12.5px;color:var(--ink3);margin-top:8px">Model-scored relevance matches, not verified patent disclosure. </p>';
   }
 
   function renderRunInfo(res, o, secs) {

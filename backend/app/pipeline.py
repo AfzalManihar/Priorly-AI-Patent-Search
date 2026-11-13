@@ -694,7 +694,7 @@ class Engine:
 
                 if covered:
                     parts = [
-                        f"Covers {names} ({chunk.loc})."
+                        f"Model match for {names} ({chunk.loc}); this is a relevance signal, not verified disclosure."
                     ]
 
                     gap = [
@@ -714,7 +714,7 @@ class Engine:
                         parts.append(
                             f"No clear text match for {gap_names}."
                             if self.scorer.name == "lexical"
-                            else f"Does not clearly cover {gap_names}."
+                            else f"No strong model match for {gap_names}."
                         )
 
                 else:
@@ -724,7 +724,7 @@ class Engine:
                             f"Closest passage is in {chunk.loc}."
                             if self.scorer.name == "lexical"
                             else
-                            f"No claim element is clearly covered. "
+                            f"No strong model match detected for any claim element. "
                             f"Closest passage is in {chunk.loc}."
                         )
                     ]
