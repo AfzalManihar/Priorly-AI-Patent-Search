@@ -65,6 +65,7 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         load_dotenv(ROOT_DIR / ".env")
+        load_dotenv(BACKEND_DIR / ".env")
         sample = BACKEND_DIR / "data" / "sample"
         frontend = Path(_env("FRONTEND_DIR", str(ROOT_DIR / "frontend")))
         return cls(

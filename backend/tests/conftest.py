@@ -19,6 +19,7 @@ def make_settings(tmp_path, **overrides) -> Settings:
     s.dense_backend = "tfidf"
     s.rerank_backend = "lexical"
     s.llm_backend = "heuristic"
+    s.access_token = ""
     s.qdrant_url = ":memory:"
     s.db_path = tmp_path / "test.db"
     s.corpus_path = SAMPLE / "corpus.jsonl"
