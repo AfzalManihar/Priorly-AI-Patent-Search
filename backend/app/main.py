@@ -10,6 +10,7 @@ import io
 import json
 import logging
 import os
+import secrets
 import time
 import uuid
 from collections import Counter, defaultdict, deque
@@ -163,7 +164,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def _hardening(request: Request, call_next):
         request_id = request.headers.get("x-request-id", "")[:64] or uuid.uuid4().hex[:12]
         started = time.perf_counter()
-        response = await call_next(request)
+        if (request.url.path.startswith("/api")
+                and request.method != "OPTIONS"
+                and cfg.access_token
+                and not secrets.compare_digest(
+                    request.headers.get("x-priorly-access-token", ""),
+                    cfg.access_token,
+                )):
+            response = JSONResponse(
+                status_code=401,
+                content={"error": {"code": "access_denied", "message": "Enter the Priorly access code to continue."}},
+            )
+        else:
+            response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)

@@ -60,6 +60,7 @@ class Settings:
     claim_min_chars: int = 40
     claim_max_chars: int = 8000
     cors_origins: list[str] = field(default_factory=lambda: ["*"])
+    access_token: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -86,4 +87,5 @@ class Settings:
             rerank_depth=int(_env("RERANK_DEPTH", "50")),
             rate_limit_per_min=int(_env("RATE_LIMIT_PER_MIN", "60")),
             cors_origins=[o.strip() for o in _env("CORS_ORIGINS", "").split(",") if o.strip()],
+            access_token=_env("PRIORLY_ACCESS_TOKEN", ""),
         )

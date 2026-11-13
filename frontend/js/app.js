@@ -657,9 +657,9 @@
 
       host.innerHTML = items.map(function (s) {
         var link = s.report_id
-          ? ' <a class="btn sm" href="' + PriorlyAPI.exportUrl(s.report_id) +
-            '">Export CSV</a> <a class="btn sm" href="' +
-            PriorlyAPI.pdfUrl(s.report_id) + '">Export PDF</a>'
+          ? ' <button class="btn sm" type="button" data-export="csv" data-report-id="' + esc(s.report_id) +
+            '">Export CSV</button> <button class="btn sm" type="button" data-export="pdf" data-report-id="' +
+            esc(s.report_id) + '">Export PDF</button>'
           : "";
 
         return '<div class="item"><div><b>' + esc(s.title) +
@@ -668,6 +668,12 @@
           '</small></div><span style="display:flex;gap:8px;align-items:center"><span class="chip">Best ' +
           Number(s.best).toFixed(2) + "</span>" + link + "</span></div>";
       }).join("");
+      host.querySelectorAll("[data-export]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          PriorlyAPI.downloadExport(button.getAttribute("data-report-id"), button.getAttribute("data-export"))
+            .catch(function (e) { alert(e.message); });
+        });
+      });
     }
 
     if (live) {

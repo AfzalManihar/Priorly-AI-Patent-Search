@@ -12,10 +12,23 @@
     return new ApiError(status, e.code || "http_" + status, e.message || "The request failed. Try again.");
   }
 
+  function accessHeaders(jsonBody) {
+    var token = window.sessionStorage.getItem("priorly_access_token");
+    if (token === null) {
+      token = window.prompt("Enter the Priorly demo access code:");
+      if (token === null) token = "";
+      window.sessionStorage.setItem("priorly_access_token", token.trim());
+      token = token.trim();
+    }
+    var headers = { "X-Priorly-Access-Token": token };
+    if (jsonBody) headers["Content-Type"] = "application/json";
+    return headers;
+  }
+
   function request(method, path, body) {
     return fetch(base + path, {
       method: method,
-      headers: body ? { "Content-Type": "application/json" } : {},
+      headers: accessHeaders(!!body),
       body: body ? JSON.stringify(body) : undefined
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (json) {
@@ -31,7 +44,7 @@
   function searchStream(claim, options, k, onEvent) {
     return fetch(base + "/api/search/stream", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: accessHeaders(true),
       body: JSON.stringify({ claim: claim, options: options, k: k })
     }).then(function (r) {
       if (!r.ok) {
@@ -72,8 +85,23 @@
     saveReport: function (searchId, title, shortlist) {
       return request("POST", "/api/reports", { search_id: searchId, title: title, shortlist: shortlist });
     },
-    exportUrl: function (reportId) { return base + "/api/reports/" + encodeURIComponent(reportId) + "/export.csv"; },
-    pdfUrl: function (reportId) { return base + "/api/reports/" + encodeURIComponent(reportId) + "/export.pdf"; },
+    downloadExport: function (reportId, format) {
+      var url = base + "/api/reports/" + encodeURIComponent(reportId) +
+        (format === "pdf" ? "/export.pdf" : "/export.csv");
+      return fetch(url, { headers: accessHeaders(false) }).then(function (r) {
+        if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { throw fail(r.status, j); });
+        return r.blob();
+      }).then(function (blob) {
+        var objectUrl = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = objectUrl;
+        a.download = "priorly-report-" + reportId + "." + (format === "pdf" ? "pdf" : "csv");
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objectUrl);
+      });
+    },
     eraseAll: function () { return request("DELETE", "/api/data?confirm=yes"); },
     getSettings: function () { return request("GET", "/api/settings"); },
     putSettings: function (values) { return request("PUT", "/api/settings", values); }
