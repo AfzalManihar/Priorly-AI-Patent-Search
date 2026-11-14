@@ -306,6 +306,14 @@ Actual metric values should be generated using the configured real corpus and be
 
 Results below use the real patent corpus and examiner-citation ground truth. These are subset measurements, not results across the complete dataset.
 
+### Development split (20 queries ? Decompose + HyDE run)
+
+| Run | Dense Recall@10 (95% CI) | Hybrid Recall@10 (95% CI) | Hybrid + rerank Recall@10 (95% CI) | + Decompose/HyDE Recall@10 (95% CI) | Precision@10 (Dense / Hybrid / Hybrid+rerank / Decompose+HyDE) | MRR (Dense / Hybrid / Hybrid+rerank / Decompose+HyDE) |
+|---|---:|---:|---:|---:|---:|---:|
+| DEV, 20 queries; Groq `openai/gpt-oss-120b`; `llm_layers_skipped=False`; degraded count 0 | 0.12 [0.01, 0.28] | 0.11 [0.0, 0.27] | 0.11 [0.0, 0.27] | 0.10 [0.0, 0.25] | 0.02 / 0.01 / 0.01 / 0.01 | 0.09 / 0.07 / 0.03 / 0.04 |
+
+All four confidence intervals overlap; there is no measurable improvement at n=20. This 20-query DEV run is not comparable with the 60-query DEV table below (different n).
+
 ### Development split (60 queries)
 
 | Retrieval stage | Recall@10 | 95% CI | Precision@10 | MRR |
@@ -331,7 +339,7 @@ Results below use the real patent corpus and examiner-citation ground truth. The
 - Reranker: top 20 candidates and 3 passages per patent.
 - Examiner citations are incomplete relevance labels; scores are lower bounds, not absolute patent-relevance accuracy.
 - All reported 95% Recall@10 confidence intervals overlap. No measurable difference or improvement between stages is established.
-- Hybrid + rerank does not use claim decomposition or HyDE. Decompose + HyDE has not been benchmarked.
+- The 60-query DEV and 40-query TEST tables report configurations without claim decomposition or HyDE; the separate 20-query DEV run is reported above.
 - These results do not support a claim that reranking improves retrieval.
 - The TEST split was run once and is frozen; do not regenerate or tune against it.
 

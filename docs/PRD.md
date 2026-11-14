@@ -67,6 +67,7 @@ The product aims to retrieve relevant prior art reliably and show grounded evide
 | Metric | Definition | Target | Measured status |
 | --- | --- | --- | --- |
 | Recall@10 | Share of examiner-cited references found in the top 10 | 0.75 or higher | DEV, 60 queries: Dense 0.1453 [0.0763, 0.2283]; Hybrid 0.1352 [0.0712, 0.2086]; Hybrid + rerank 0.1118 [0.0522, 0.1860]. TEST, 40 queries: Dense 0.1001 [0.0323, 0.1795]; Hybrid 0.1113 [0.0426, 0.1924]; Hybrid + rerank 0.0976 [0.0300, 0.1767]. |
+| Decompose + HyDE run (DEV, 20 queries) | Combined claim decomposition and HyDE evaluation; Groq `openai/gpt-oss-120b` | ? | `llm_layers_skipped=False`; degraded count 0. Recall@10 (Dense / Hybrid / Hybrid+rerank / Decompose+HyDE): 0.12 [0.01, 0.28] / 0.11 [0.0, 0.27] / 0.11 [0.0, 0.27] / 0.10 [0.0, 0.25]. Precision@10: 0.02 / 0.01 / 0.01 / 0.01. MRR: 0.09 / 0.07 / 0.03 / 0.04. |
 | Recall lift over baseline | Hybrid + rerank minus Dense baseline | 25 points or more | No measurable difference established; all reported 95% confidence intervals overlap. |
 | Precision@10 | Share of the top 10 that are examiner-cited | 0.35 or higher | DEV: Dense 0.04; Hybrid 0.0467; Hybrid + rerank 0.035. |
 | MRR | Mean reciprocal rank of the first relevant result | 0.60 or higher | DEV: Dense 0.1455; Hybrid 0.1638; Hybrid + rerank 0.1056. |
@@ -82,7 +83,7 @@ The product aims to retrieve relevant prior art reliably and show grounded evide
 - The reranker evaluates the top 20 candidates and 3 passages per patent.
 - Examiner citations are an incomplete record of relevance. Reported metrics are therefore lower bounds.
 - All reported 95% confidence intervals overlap. The available measurements do not establish a measurable difference between Dense, Hybrid, and Hybrid + rerank.
-- Decomposition and HyDE have not been benchmarked. The reported Hybrid + rerank configuration does not include them.
+- For the separate 20-query DEV run, all four 95% Recall@10 confidence intervals overlap; there is no measurable improvement at n=20. This run is not comparable with the 60-query DEV table (different n). The 60-query DEV and 40-query TEST tables report configurations without decomposition and HyDE.
 ## 4. Target users and personas
 
 Priorly serves people who must find and defend references for a claim, ranging from specialists who search daily to inventors who search once.
@@ -723,7 +724,7 @@ This section records the current implementation and the evidence actually collec
 | Benchmark harness | Built and exercised | DEV report uses 60 queries; TEST report uses 40 queries. The TEST split was run once and is frozen. |
 | Retrieval effectiveness | Measured; targets not met | Reported Recall@10 values and 95% confidence intervals are in section 3. All intervals overlap; no measurable difference between stages is established. |
 | Reranker configuration | Measured on a subset | The current source defaults to reranking the top 20 candidates using a pool of up to 5 passages per patent. The benchmark report does not record the historical chunk-pool value, so the exact passage count used for the recorded DEV/TEST runs cannot be independently confirmed. Available measurements do not establish a measurable benefit. |
-| Decomposition and HyDE | Implemented; not benchmarked | No valid measured result is available for the combined Decompose + HyDE configuration. |
+| Decomposition and HyDE | Implemented and benchmarked | DEV, 20 queries; Groq `openai/gpt-oss-120b`; `llm_layers_skipped=False`; degraded count 0. Recall@10 (Dense / Hybrid / Hybrid+rerank / Decompose+HyDE): 0.12 [0.01, 0.28] / 0.11 [0.0, 0.27] / 0.11 [0.0, 0.27] / 0.10 [0.0, 0.25]. Precision@10: 0.02 / 0.01 / 0.01 / 0.01. MRR: 0.09 / 0.07 / 0.03 / 0.04. All CIs overlap; no measurable improvement at n=20. Not comparable with the 60-query DEV table (different n). |
 | Examiner relevance labels | Incomplete | Examiner citations do not represent a complete relevance record; benchmark metrics are lower bounds. |
 | API, streaming, errors, rate limit, reports, settings | Built and tested | API health and report endpoints have been exercised. |
 | Search workspace and benchmark UI | Built | Benchmark UI working-tree changes identify the measured DEV split, query count, and Hybrid + rerank configuration. |
@@ -737,6 +738,5 @@ This section records the current implementation and the evidence actually collec
 - The reported benchmark results cover subsets of DEV and TEST, not all 941 queries.
 - Examiner citations are incomplete, so reported retrieval metrics are lower bounds.
 - All reported 95% confidence intervals overlap; no measurable difference between retrieval stages is established.
-- Decompose + HyDE has not been benchmarked.
 - The corpus contains no description paragraphs.
 - Grounded explanation quality and p95 search latency still require the planned manual and operational checks.
