@@ -671,7 +671,7 @@ class Engine:
                 )
             )
 
-        def build_why(item, written=None) -> str:
+        def build_why(item) -> str:
             if not opts.explain:
                 return ""
 
@@ -748,89 +748,48 @@ class Engine:
 
             template = " ".join(parts)
 
+            try:
+                elements = [
+                    (n, t)
+                    for n, t in enumerate(texts, start=1)
+                ]
+
+                written = self.llm.explain(
+                    elements,
+                    covered,
+                    chunk.text,
+                    patent.title,
+                )
+
+            except LLMError:
+                if "explain" not in degraded:
+                    degraded.append("explain")
+
+                written = None
+
             return (
                 f"{written} {parts[-1]}"
                 if written and missed
                 else (written or template)
             )
 
-        if not opts.explain:
-            whys = [build_why(item) for item in prepared]
-
-        elif (
-            getattr(self.llm, "name", "") == "groq"
-            and hasattr(self.llm, "explain_batch")
-            and prepared
+        if (
+            getattr(self.llm, "name", "") == "heuristic"
+            or len(prepared) < 2
         ):
-            elements = [
-                {"number": n, "text": text}
-                for n, text in enumerate(texts, start=1)
+            whys = [
+                build_why(item)
+                for item in prepared
             ]
-            batch_items = []
-
-            for index, item in enumerate(prepared, start=1):
-                (
-                    pid, patent, chunk, covered,
-                    d_rank, b_rank, missed, marks,
-                ) = item
-                batch_items.append({
-                    "id": f"R{index}",
-                    "title": patent.title,
-                    "elements": elements,
-                    "passage": chunk.text,
-                })
-
-            try:
-                batch_written = self.llm.explain_batch(batch_items)
-            except LLMError:
-                log.exception("Batch explanation failed; using grounded templates")
-                batch_written = {}
-                if "explain" not in degraded:
-                    degraded.append("explain")
-
-            whys = []
-            for index, item in enumerate(prepared, start=1):
-                written = batch_written.get(f"R{index}")
-                if not written and "explain" not in degraded:
-                    degraded.append("explain")
-                whys.append(build_why(item, written))
 
         else:
-            def explain_one(item):
-                if getattr(self.llm, "name", "") == "heuristic":
-                    return None
-
-                (
-                    pid, patent, chunk, covered,
-                    d_rank, b_rank, missed, marks,
-                ) = item
-                elements = [
-                    (n, text)
-                    for n, text in enumerate(texts, start=1)
-                ]
-
-                try:
-                    return self.llm.explain(
-                        elements, covered, chunk.text, patent.title
+            with ThreadPoolExecutor(max_workers=4) as pool_exec:
+                whys = list(
+                    pool_exec.map(
+                        build_why,
+                        prepared,
                     )
-                except LLMError:
-                    if "explain" not in degraded:
-                        degraded.append("explain")
-                    return None
-
-            if (
-                getattr(self.llm, "name", "") == "heuristic"
-                or len(prepared) < 2
-            ):
-                written_list = [explain_one(item) for item in prepared]
-            else:
-                with ThreadPoolExecutor(max_workers=4) as pool_exec:
-                    written_list = list(pool_exec.map(explain_one, prepared))
-
-            whys = [
-                build_why(item, written)
-                for item, written in zip(prepared, written_list)
-            ]
+                )
 
         results = []
 
