@@ -722,7 +722,7 @@ This section records the current implementation and the evidence actually collec
 | Real retrieval backends | Exercised | BGE embeddings, BGE cross-encoder, Groq LLM, and local Qdrant have been used in the real pipeline. |
 | Benchmark harness | Built and exercised | DEV report uses 60 queries; TEST report uses 40 queries. The TEST split was run once and is frozen. |
 | Retrieval effectiveness | Measured; targets not met | Reported Recall@10 values and 95% confidence intervals are in section 3. All intervals overlap; no measurable difference between stages is established. |
-| Reranker configuration | Measured on a subset | Reranks the top 20 candidates using 3 passages per patent. The available measurements do not establish a measurable benefit. |
+| Reranker configuration | Measured on a subset | The current source defaults to reranking the top 20 candidates using a pool of up to 5 passages per patent. The benchmark report does not record the historical chunk-pool value, so the exact passage count used for the recorded DEV/TEST runs cannot be independently confirmed. Available measurements do not establish a measurable benefit. |
 | Decomposition and HyDE | Implemented; not benchmarked | No valid measured result is available for the combined Decompose + HyDE configuration. |
 | Examiner relevance labels | Incomplete | Examiner citations do not represent a complete relevance record; benchmark metrics are lower bounds. |
 | API, streaming, errors, rate limit, reports, settings | Built and tested | API health and report endpoints have been exercised. |

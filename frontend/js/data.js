@@ -63,12 +63,12 @@ window.EVAL = {
   split: "dev",
   query_count: 60,
   k: 10,
-  version: "real",
+  version: "v1",
   note: "Examiner citations are an incomplete record of relevance, so these numbers are a lower bound. The 95% confidence intervals overlap; no measurable difference between stages is established. Decomposition and HyDE were not benchmarked.",
   stages: [
     { key: "dense", name: "Dense only", recall: 0.1453, precision: 0.04, mrr: 0.1455, recall_ci: [0.0763, 0.2283] },
     { key: "hybrid", name: "+ BM25 and RRF", recall: 0.1352, precision: 0.0467, mrr: 0.1638, recall_ci: [0.0712, 0.2086] },
-    { key: "rerank", name: "+ Cross-encoder rerank", recall: 0.1118, precision: 0.035, mrr: 0.1056, recall_ci: [0.0522, 0.1860] }
+    { key: "rerank", name: "Hybrid + rerank (no decompose/HyDE)", recall: 0.1118, precision: 0.035, mrr: 0.1056, recall_ci: [0.0522, 0.1860] }
   ],
   byType: [
     { type: "Chemical and formula queries", n: 9, dense: 0.295, hybrid: 0.3386, full: 0.2831 },

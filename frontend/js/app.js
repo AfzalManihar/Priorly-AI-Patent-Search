@@ -696,7 +696,11 @@
     if (live) {
       PriorlyAPI.benchmark().then(function (r) {
         curEval = {
-          stages: r.stages,
+          stages: (r.stages || []).map(function (s) {
+            return s.key === "rerank"
+              ? Object.assign({}, s, { name: "Hybrid + rerank (no decompose/HyDE)" })
+              : s;
+          }),
           byType: r.by_type,
           count: r.query_count,
           split: r.split,
