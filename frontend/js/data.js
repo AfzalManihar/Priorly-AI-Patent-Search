@@ -82,3 +82,36 @@ window.SAVED_SEED = [
   { title: "Solid-state electrolyte coating, claims 1-4", date: "21 Oct 2026", n: 12, best: 0.87 },
   { title: "Edge caching of encrypted media segments", date: "14 Oct 2026", n: 9, best: 0.79 }
 ];
+
+/* ---------- RAGAS Offline Evaluation ---------- */
+window.RAGAS_EVAL = {
+  metric_type: "RAGAS ID-based retrieval metrics",
+  k: 10,
+  note: "Offline evaluation on saved benchmark results. RAGAS ID-based Recall and Precision match the custom retrieval metrics on the same relevance labels. This is a scoring consistency check, not independent evidence of retrieval improvement. Faithfulness has not been evaluated.",
+  datasets: [
+    {
+      split: "DEV",
+      query_count: 60,
+      source: "bench_dev60_rerank.json",
+      stages: [
+        { key: "dense", name: "Dense only", recall: 0.1452778, precision: 0.0400, custom_mrr: 0.1454828 },
+        { key: "hybrid", name: "Hybrid + BM25/RRF", recall: 0.1351984, precision: 0.0467, custom_mrr: 0.1637963 },
+        { key: "rerank", name: "Hybrid + rerank", recall: 0.1118254, precision: 0.0350, custom_mrr: 0.1056217 }
+      ],
+      max_abs_diff: 0,
+      mismatches: "0/60"
+    },
+    {
+      split: "TEST",
+      query_count: 40,
+      source: "bench_test40.json",
+      stages: [
+        { key: "dense", name: "Dense only", recall: 0.1001, precision: 0.0300, custom_mrr: 0.1750 },
+        { key: "hybrid", name: "Hybrid + BM25/RRF", recall: 0.1113, precision: 0.0375, custom_mrr: 0.1521 },
+        { key: "rerank", name: "Hybrid + rerank", recall: 0.0976, precision: 0.0300, custom_mrr: 0.0997 }
+      ],
+      max_abs_diff: 0,
+      mismatches: "0/40"
+    }
+  ]
+};

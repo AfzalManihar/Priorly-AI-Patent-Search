@@ -737,6 +737,7 @@
   }
 
   function drawEval() {
+    renderRagas();
     var ev = curEval;
     var st = Array.isArray(curEval.stages) ? curEval.stages : [];
 
@@ -762,7 +763,7 @@
     };
 
     $("#evalSub").textContent =
-      (ev.split ? ev.split.toUpperCase() + " split · " : "") +
+      (ev.split ? ev.split.toUpperCase() + " split Â· " : "") +
       ev.count + " queries evaluated with examiner-cited ground truth.";
 
     $("#metrics").innerHTML =
@@ -777,7 +778,7 @@
       pts(last.mrr, first.mrr) + "</span></div>" +
       '<div class="metric"><small>Queries evaluated</small><b>' +
       ev.count + '</b><span style="color:var(--ink3)">' +
-      (ev.split ? ev.split.toUpperCase() + " · " : "") +
+      (ev.split ? ev.split.toUpperCase() + " Â· " : "") +
       "Dataset " + esc(ev.version || "real") + "</span></div>";
 
     renderChart();
@@ -820,6 +821,36 @@
       }).join("");
 
     $("#evalNote").textContent = ev.note || "";
+  }
+
+  function renderRagas() {
+    var host = $("#ragasHost");
+    var data = window.RAGAS_EVAL;
+    if (!host) return;
+    if (!data || !Array.isArray(data.datasets)) {
+      host.innerHTML = '<div class="empty">RAGAS evaluation data is unavailable.</div>';
+      return;
+    }
+    host.innerHTML = data.datasets.map(function (ds) {
+      var rows = (ds.stages || []).map(function (s) {
+        return "<tr><td>" + esc(s.name) + "</td>" +
+          '<td class="num">' + (s.recall * 100).toFixed(2) + "%</td>" +
+          '<td class="num">' + (s.precision * 100).toFixed(2) + "%</td>" +
+          '<td class="num">' + s.custom_mrr.toFixed(4) + "</td></tr>";
+      }).join("");
+      return '<div class="ragas-dataset">' +
+        "<h4>" + esc(ds.split) + " · " + ds.query_count +
+        " queries · Recall/Precision @" + data.k + "</h4>" +
+        '<table><thead><tr><th>Pipeline stage</th>' +
+        '<th class="num">RAGAS Recall@' + data.k + "</th>" +
+        '<th class="num">RAGAS Precision@' + data.k + "</th>" +
+        '<th class="num">Custom MRR</th></tr></thead><tbody>' + rows +
+        "</tbody></table>" +
+        '<p class="note">Scoring consistency: max difference ' +
+        Number(ds.max_abs_diff).toFixed(6) +
+        " · Stored mismatches: " + esc(ds.mismatches) +
+        " · Source: " + esc(ds.source) + "</p></div>";
+    }).join("") + '<p class="note">' + esc(data.note) + "</p>";
   }
 
   function renderChart() {
