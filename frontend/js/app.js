@@ -1,3 +1,4 @@
+
 (function () {
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
@@ -698,6 +699,7 @@
           stages: r.stages,
           byType: r.by_type,
           count: r.query_count,
+          split: r.split,
           note: r.note,
           sample: r.sample,
           version: r.dataset_version,
@@ -718,11 +720,12 @@
       curEval = {
         stages: EVAL.stages,
         byType: EVAL.byType,
-        count: 200,
-        sample: true,
-        version: "demo",
-        k: 10,
-        note: "Sample numbers for the demo. Run the evaluation harness for real ones."
+        count: EVAL.query_count,
+        split: EVAL.split,
+        sample: false,
+        version: EVAL.version,
+        k: EVAL.k,
+        note: EVAL.note
       };
 
       drawEval();
@@ -755,8 +758,8 @@
     };
 
     $("#evalSub").textContent =
-      "How much each retrieval layer adds, measured on " +
-      ev.count + " queries with examiner-cited ground truth.";
+      (ev.split ? ev.split.toUpperCase() + " split · " : "") +
+      ev.count + " queries evaluated with examiner-cited ground truth.";
 
     $("#metrics").innerHTML =
       '<div class="metric"><small>Recall@' + ev.k +
@@ -769,15 +772,16 @@
       last.mrr.toFixed(2) + "</b><span>" +
       pts(last.mrr, first.mrr) + "</span></div>" +
       '<div class="metric"><small>Queries evaluated</small><b>' +
-      ev.count + '</b><span style="color:var(--ink3)">Dataset ' +
-      esc(ev.version) + "</span></div>";
+      ev.count + '</b><span style="color:var(--ink3)">' +
+      (ev.split ? ev.split.toUpperCase() + " · " : "") +
+      "Dataset " + esc(ev.version || "real") + "</span></div>";
 
     renderChart();
 
     var byType = Array.isArray(ev.byType) ? ev.byType : [];
 
     $("#typeTable").innerHTML =
-      '<thead><tr><th>Query type</th><th class="num">Queries</th><th class="num">Dense</th><th class="num">Hybrid</th><th class="num">Full pipeline</th><th class="num">Lift</th></tr></thead><tbody>' +
+      '<thead><tr><th>Query type</th><th class="num">Queries</th><th class="num">Dense</th><th class="num">Hybrid</th><th class="num">Hybrid + rerank (no decompose/HyDE)</th><th class="num">Lift</th></tr></thead><tbody>' +
       byType.map(function (r) {
         var lift = Math.round((r.full - r.dense) * 100);
 

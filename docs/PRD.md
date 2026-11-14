@@ -44,12 +44,12 @@ A single missed reference can invalidate a patent opinion, yet the tools that fi
 
 ## 3. Goals, non-goals, and success metrics
 
-The product succeeds if the full pipeline retrieves examiner-cited prior art far more reliably than a vector-only baseline, and shows its work.
+The product aims to retrieve relevant prior art reliably and show grounded evidence. The targets below are product goals, not achieved results. Measured results are reported separately and must not be interpreted as proof that a stage improves retrieval.
 
 **Goals**
 
 - G1. Retrieve relevant prior art for a claim with Recall@10 of at least 0.75 on the benchmark set.
-- G2. Prove the contribution of each retrieval layer with a measured lift table.
+- G2. Measure the contribution of each retrieval layer without claiming a lift unless the evidence supports it.
 - G3. Explain every result with a matching passage, element coverage, and a stage-by-stage rank trace.
 - G4. Never present an explanation that is not grounded in a retrieved passage.
 - G5. Deliver a search experience that feels like a production SaaS product: fast, clear, accessible, and consistent in light and dark themes.
@@ -57,24 +57,32 @@ The product succeeds if the full pipeline retrieves examiner-cited prior art far
 **Non-goals**
 
 - Legal opinions on validity, infringement, or patentability. Priorly is a research aid.
-- Full-text coverage of every patent office. The first corpus is limited to one technology area.
+- Full-text coverage of every patent office. The current corpus has limited coverage.
 - Multi-language search and machine translation.
 - Image or drawing search.
 - Real billing, payments, or multi-tenant enterprise administration. Pricing and team features are interface placeholders.
 
-**Success metrics**
+**Success metrics: targets versus measured results**
 
-| Metric | Definition | Target |
-| --- | --- | --- |
-| Recall@10 | Share of examiner-cited references found in the top 10 | 0.75 or higher for the full pipeline |
-| Recall lift over baseline | Full pipeline minus vector-only baseline, in points | 25 points or more |
-| Precision@10 | Share of the top 10 that are examiner-cited | 0.35 or higher |
-| MRR | Mean reciprocal rank of the first relevant result | 0.60 or higher |
-| Exact-identifier recall | Recall@10 on queries that contain a patent ID or formula | 0.80 or higher |
-| Grounded explanations | Result reasons whose claims are supported by the cited passage | 95% or higher on a reviewed sample |
-| Search latency, p95 | Time from request to complete result set | 8 seconds or less with the LLM stages on |
-| Interface accessibility | Automated audit score on core screens | 95 or higher |
+| Metric | Definition | Target | Measured status |
+| --- | --- | --- | --- |
+| Recall@10 | Share of examiner-cited references found in the top 10 | 0.75 or higher | DEV, 60 queries: Dense 0.1453 [0.0763, 0.2283]; Hybrid 0.1352 [0.0712, 0.2086]; Hybrid + rerank 0.1118 [0.0522, 0.1860]. TEST, 40 queries: Dense 0.1001 [0.0323, 0.1795]; Hybrid 0.1113 [0.0426, 0.1924]; Hybrid + rerank 0.0976 [0.0300, 0.1767]. |
+| Recall lift over baseline | Hybrid + rerank minus Dense baseline | 25 points or more | No measurable difference established; all reported 95% confidence intervals overlap. |
+| Precision@10 | Share of the top 10 that are examiner-cited | 0.35 or higher | DEV: Dense 0.04; Hybrid 0.0467; Hybrid + rerank 0.035. |
+| MRR | Mean reciprocal rank of the first relevant result | 0.60 or higher | DEV: Dense 0.1455; Hybrid 0.1638; Hybrid + rerank 0.1056. |
+| Exact-identifier recall | Recall@10 on queries that contain a patent ID or formula | 0.80 or higher | Not established as a separate benchmark target/result. |
+| Grounded explanations | Result reasons whose claims are supported by the cited passage | 95% or higher on a reviewed sample | Not yet hand-reviewed on a 50-explanation sample. |
+| Search latency, p95 | Time from request to complete result set | 8 seconds or less with the LLM stages on | Not yet measured over 50 or more searches. |
+| Interface accessibility | Automated audit score on core screens | 95 or higher | Not yet established by a reported audit result. |
 
+**Benchmark interpretation and limitations**
+
+- The corpus contains 5,803 patents, including 5,799 with claims and no description paragraphs; corpus years are 1976-2017. The indexed corpus contains 123,901 chunks.
+- The query collection contains 941 queries: 376 DEV, 185 VAL, and 380 TEST. The reported DEV result uses 60 queries and the reported TEST result uses 40 queries; these are subsets, not the complete splits.
+- The reranker evaluates the top 20 candidates and 3 passages per patent.
+- Examiner citations are an incomplete record of relevance. Reported metrics are therefore lower bounds.
+- All reported 95% confidence intervals overlap. The available measurements do not establish a measurable difference between Dense, Hybrid, and Hybrid + rerank.
+- Decomposition and HyDE have not been benchmarked. The reported Hybrid + rerank configuration does not include them.
 ## 4. Target users and personas
 
 Priorly serves people who must find and defend references for a claim, ranging from specialists who search daily to inventors who search once.
@@ -704,23 +712,31 @@ Every runtime choice is an environment variable, read from the process or from a
 
 ## 20. Delivered status and known limitations
 
-This section states plainly what exists, what has been exercised, and what has not, so the document can be read as a record of the build and not only as a plan.
+This section records the current implementation and the evidence actually collected. Product targets in section 3 are not claims of achieved performance.
 
 | Area | State | Notes |
 | --- | --- | --- |
-| Retrieval pipeline, six stages with switches | Built and tested | Runs on the sample corpus with offline backends |
-| API, streaming, errors, rate limit, reports, settings | Built and tested | Contract matches section 10 |
-| Search workspace, trace drawer, benchmark, reports, settings | Built and checked in a browser | Live mode against the API and demo mode without it; light and dark; phone width |
-| Corpus and query builders | Built; tested on a small synthetic fixture | Column names for PatentsView tables are unconfirmed; a header check mode is provided |
-| Benchmark harness | Built and tested | Numbers on the bundled sample are flagged as sample data and show no layer lift |
-| BGE embeddings, BGE cross-encoder, hosted LLM | Code written; not run | No model download or key was available; the hosted client is tested against a mock transport |
-| Qdrant server mode | Code written; not run against a server | The in-memory path is tested |
-| Landing page benchmark bars | Placeholder values | Replace with measured results before the page is shown |
-| Report export | CSV and PDF | Both formats are built and tested |
-| Delete stored claims on request | Built and tested | Erase one search or all stored data (NFR-08); Settings has an Erase button |
-| Cache hit rate in logs | Built and tested | Cache hit rate in the search log and at /api/metrics (NFR-09), with latency percentiles and error counts |
-| Passage location format | Paragraph sequence number | Not the patent's own bracketed paragraph label |
-| Container image | Written; not built here | No container daemon was available; the image follows the steps that were run locally and has an unprivileged user, a health check and a restart policy |
-| Automated checks | 60 backend tests passing | A continuous integration workflow runs them on two Python versions and syntax-checks the front end |
+| Retrieval pipeline | Built and exercised | Claim decomposition, HyDE, BM25, BGE dense retrieval, RRF, cross-encoder reranking, and grounded explanations are implemented. The reported rerank benchmark configuration disables decomposition and HyDE. |
+| Real corpus | Built and indexed | 5,803 patents; 5,799 have claims; no description paragraphs; 123,901 chunks; years 1976-2017. |
+| Query and relevance data | Built | 941 queries: 376 DEV, 185 VAL, 380 TEST. All relevant patent IDs are present in the corpus. |
+| Real retrieval backends | Exercised | BGE embeddings, BGE cross-encoder, Groq LLM, and local Qdrant have been used in the real pipeline. |
+| Benchmark harness | Built and exercised | DEV report uses 60 queries; TEST report uses 40 queries. The TEST split was run once and is frozen. |
+| Retrieval effectiveness | Measured; targets not met | Reported Recall@10 values and 95% confidence intervals are in section 3. All intervals overlap; no measurable difference between stages is established. |
+| Reranker configuration | Measured on a subset | Reranks the top 20 candidates using 3 passages per patent. The available measurements do not establish a measurable benefit. |
+| Decomposition and HyDE | Implemented; not benchmarked | No valid measured result is available for the combined Decompose + HyDE configuration. |
+| Examiner relevance labels | Incomplete | Examiner citations do not represent a complete relevance record; benchmark metrics are lower bounds. |
+| API, streaming, errors, rate limit, reports, settings | Built and tested | API health and report endpoints have been exercised. |
+| Search workspace and benchmark UI | Built | Benchmark UI working-tree changes identify the measured DEV split, query count, and Hybrid + rerank configuration. |
+| Automated checks | 77 tests passing | Latest local run: `python -m pytest -q` reported 77 passed. The frozen TEST evaluation split was not rerun. |
+| Grounded explanation review | Pending | A 50-explanation manual review has not yet been completed. |
+| Search latency p95 | Pending | A p95 measurement after 50 or more searches has not yet been completed. |
+| Deployment | Pending | Production deployment and its operational verification are not yet complete. |
 
-The next milestone is a measured result: ingest the real corpus, enable the real backends, run the test split once, and replace every placeholder number with the output.
+**Known limitations**
+
+- The reported benchmark results cover subsets of DEV and TEST, not all 941 queries.
+- Examiner citations are incomplete, so reported retrieval metrics are lower bounds.
+- All reported 95% confidence intervals overlap; no measurable difference between retrieval stages is established.
+- Decompose + HyDE has not been benchmarked.
+- The corpus contains no description paragraphs.
+- Grounded explanation quality and p95 search latency still require the planned manual and operational checks.

@@ -30,3 +30,7 @@ build/
 # Generated evaluation cache and vector database
 backend/data/eval_cache.db
 backend/data/qdrant_storage/
+**/data/real_raw/
+**/data/qdrant_storage_backup_*/
+**/data/real_missing_claims_candidate/
+*.bak

@@ -302,6 +302,39 @@ The modular pipeline supports comparisons across retrieval stages:
 
 Actual metric values should be generated using the configured real corpus and benchmark. Sample-corpus metrics must not be presented as real-world patent retrieval performance.
 
+## Measured Retrieval Results
+
+Results below use the real patent corpus and examiner-citation ground truth. These are subset measurements, not results across the complete dataset.
+
+### Development split (60 queries)
+
+| Retrieval stage | Recall@10 | 95% CI | Precision@10 | MRR |
+|---|---:|---:|---:|---:|
+| Dense only | 0.1453 | 0.0763–0.2283 | 0.0400 | 0.1455 |
+| Hybrid (BM25 + RRF) | 0.1352 | 0.0712–0.2086 | 0.0467 | 0.1638 |
+| Hybrid + cross-encoder rerank | 0.1118 | 0.0522–0.1860 | 0.0350 | 0.1056 |
+
+### Test split (40 queries; run once)
+
+| Retrieval stage | Recall@10 | 95% CI | Precision@10* | MRR* |
+|---|---:|---:|---:|---:|
+| Dense only | 0.1001 | 0.0323–0.1795 | 0.03 | 0.17 |
+| Hybrid (BM25 + RRF) | 0.1113 | 0.0426–0.1924 | 0.04 | 0.15 |
+| Hybrid + cross-encoder rerank | 0.0976 | 0.0300–0.1767 | 0.03 | 0.10 |
+
+*Test precision and MRR are shown at the two-decimal precision printed by the evaluation output.
+
+### Interpretation and limitations
+
+- Corpus: 5,803 patents (5,799 with claims), 123,901 chunks, no description paragraphs; years 1976-2017.
+- Query collection: 941 queries (376 DEV, 185 VAL, 380 TEST). Reported DEV and TEST results use subsets of 60 and 40 queries respectively.
+- Reranker: top 20 candidates and 3 passages per patent.
+- Examiner citations are incomplete relevance labels; scores are lower bounds, not absolute patent-relevance accuracy.
+- All reported 95% Recall@10 confidence intervals overlap. No measurable difference or improvement between stages is established.
+- Hybrid + rerank does not use claim decomposition or HyDE. Decompose + HyDE has not been benchmarked.
+- These results do not support a claim that reranking improves retrieval.
+- The TEST split was run once and is frozen; do not regenerate or tune against it.
+
 ## 📄 Reports and Data Management
 
 | Capability | Description |

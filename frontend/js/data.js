@@ -60,17 +60,20 @@ window.PATENTS = [
 ];
 
 window.EVAL = {
+  split: "dev",
+  query_count: 60,
+  k: 10,
+  version: "real",
+  note: "Examiner citations are an incomplete record of relevance, so these numbers are a lower bound. The 95% confidence intervals overlap; no measurable difference between stages is established. Decomposition and HyDE were not benchmarked.",
   stages: [
-    { key: "dense", name: "Dense only", recall: 0.41, precision: 0.22, mrr: 0.35 },
-    { key: "hybrid", name: "+ BM25 and RRF", recall: 0.58, precision: 0.29, mrr: 0.46 },
-    { key: "rerank", name: "+ Cross-encoder rerank", recall: 0.72, precision: 0.38, mrr: 0.58 },
-    { key: "full", name: "+ Decompose and HyDE", recall: 0.81, precision: 0.44, mrr: 0.66 }
+    { key: "dense", name: "Dense only", recall: 0.1453, precision: 0.04, mrr: 0.1455, recall_ci: [0.0763, 0.2283] },
+    { key: "hybrid", name: "+ BM25 and RRF", recall: 0.1352, precision: 0.0467, mrr: 0.1638, recall_ci: [0.0712, 0.2086] },
+    { key: "rerank", name: "+ Cross-encoder rerank", recall: 0.1118, precision: 0.035, mrr: 0.1056, recall_ci: [0.0522, 0.1860] }
   ],
   byType: [
-    { type: "Mechanical claims", n: 74, dense: 0.47, hybrid: 0.60, full: 0.83 },
-    { type: "Chemical and formula queries", n: 52, dense: 0.29, hybrid: 0.57, full: 0.78 },
-    { type: "Software and protocol claims", n: 48, dense: 0.50, hybrid: 0.58, full: 0.84 },
-    { type: "Queries containing an exact patent ID", n: 26, dense: 0.12, hybrid: 0.69, full: 0.88 }
+    { type: "Chemical and formula queries", n: 9, dense: 0.295, hybrid: 0.3386, full: 0.2831 },
+    { type: "Mechanical claims", n: 46, dense: 0.1173, hybrid: 0.0992, full: 0.076 },
+    { type: "Software and protocol claims", n: 5, dense: 0.1333, hybrid: 0.1, full: 0.1333 }
   ]
 };
 
