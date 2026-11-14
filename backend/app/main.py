@@ -165,6 +165,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request_id = request.headers.get("x-request-id", "")[:64] or uuid.uuid4().hex[:12]
         started = time.perf_counter()
         if (request.url.path.startswith("/api")
+                and request.url.path != "/api/health"
                 and request.method != "OPTIONS"
                 and cfg.access_token
                 and not secrets.compare_digest(
