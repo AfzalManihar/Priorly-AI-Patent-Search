@@ -200,6 +200,54 @@ class GroqLLM:
         text = self._cached("explain", user, lambda: self._chat(self.EXPLAIN_SYSTEM, user))
         return text or None
 
+    BATCH_EXPLAIN_SYSTEM = (
+        "You explain patent passages against claim elements. For each item, explain in at most "
+        "40 words which listed elements the passage supports. Use ONLY that item's passage; "
+        "do not infer anything not written. Return JSON only in this format: "
+        '{"explanations": {"R1": "explanation", "R2": "explanation"}}.'
+    )
+
+    def explain_batch(self, items: list[dict]) -> dict[str, str]:
+        if not items:
+            return {}
+
+        payload = json.dumps({"items": items}, ensure_ascii=False, sort_keys=True)
+        user = (
+            "Explain each item independently. Keep each response concise and grounded only "
+            "in its own passage. Preserve every supplied item ID.\n\n" + payload
+        )
+
+        def produce():
+            raw = self._chat(self.BATCH_EXPLAIN_SYSTEM, user, json_mode=True)
+            try:
+                parsed = json.loads(raw)
+                explanations = parsed["explanations"]
+            except (ValueError, KeyError, TypeError) as exc:
+                raise LLMError("LLM returned invalid batch explanations") from exc
+
+            if not isinstance(explanations, dict):
+                raise LLMError("LLM returned invalid batch explanations")
+
+            cleaned = {
+                str(key): value.strip()
+                for key, value in explanations.items()
+                if isinstance(value, str) and value.strip()
+            }
+            if not cleaned:
+                raise LLMError("LLM returned no usable batch explanations")
+
+            return json.dumps(cleaned, ensure_ascii=False, sort_keys=True)
+
+        cached = self._cached("explain_batch", user, produce)
+        try:
+            result = json.loads(cached)
+        except (ValueError, TypeError) as exc:
+            raise LLMError("Cached batch explanations are invalid") from exc
+
+        if not isinstance(result, dict):
+            raise LLMError("Cached batch explanations are invalid")
+        return result
+
 
 def make_llm(settings, store=None):
     if settings.llm_backend == "heuristic":
