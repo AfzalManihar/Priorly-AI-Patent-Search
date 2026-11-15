@@ -1,5 +1,5 @@
 
-(function () {
+﻿(function () {
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var RRF_K = 60;
@@ -425,13 +425,13 @@
         '<div style="font-size:13px;color:var(--ink3);margin-top:2px">' +
         esc(p.id) + " &middot; " + esc(p.assignee) + " &middot; " +
         p.year + " &middot; " + esc(p.cpc) + "</div>" +
-        '<div class="head">' + (p.elN ? chips(p) : "") +
+        '<div class="head">' + (p.elN ? '<span class="signal-label">BGE relevance:</span>' + chips(p) : "") +
         (kwOnly ? '<span class="chip flag">Missed by vector search</span>' : "") +
         "</div>" +
         '<p class="quote">' + p.passage +
         ' <span style="font-family:var(--sans);font-size:12px;color:var(--ink3)">' +
         esc(p.loc) + "</span></p>" +
-        '<p class="why">' + esc(p.why) + "</p></div>" +
+        '<p class="why"><b>Passage assessment (Groq):</b> ' + esc(p.why) + "</p></div>" +
         '<div class="side-col"><div class="score">' + sc.v +
         "<small>" + sc.l + "</small></div>" +
         '<div class="actions-row">' +
@@ -453,7 +453,7 @@
 
     if (res.elements.length === 1 && res.elements[0].whole_claim) {
       $("#coverage").innerHTML =
-        '<p style="color:var(--ink3);font-size:13.5px">Element match signals are shown when the claim is decomposed.</p>';
+        '<p style="color:var(--ink3);font-size:13.5px">BGE element relevance signals appear when the claim is decomposed.</p>';
       return;
     }
 
@@ -469,7 +469,7 @@
         Math.round(c / Math.max(n, 1) * 100) +
         '%"></i></div><span>' + c + "/" + n + "</span></div>";
     }).join("") +
-      '<p style="font-size:12.5px;color:var(--ink3);margin-top:8px">Model-scored relevance matches, not verified patent disclosure. </p>';
+      '<p style="font-size:12.5px;color:var(--ink3);margin-top:8px">Counts show BGE similarity signals among displayed results, not confirmed patent disclosure. Groq passage assessments are independent.</p>';
   }
 
   function renderRunInfo(res, o, secs) {
@@ -486,6 +486,16 @@
     if (m) {
       rows.push(["Candidates considered", String(m.candidates_considered)]);
       rows.push(["Server time", (m.timings_ms.total / 1000).toFixed(2) + " s"]);
+      var w = m.work;
+      if (w) {
+        if (o.rerank || o.decompose) {
+          rows.push(["Reranker pairs scored", String(w.rerank_pairs_scored) +
+            (w.rerank_pairs_from_cache ? " (+" + w.rerank_pairs_from_cache + " reused from cache)" : "")]);
+        }
+        if (m.retrieval.llm_backend === "groq") {
+          rows.push(["Groq calls", String(w.llm_calls) + (w.llm_from_cache ? " (+" + w.llm_from_cache + " from cache)" : "")]);
+        }
+      }
     } else {
       rows.push(["Demo run time", secs.toFixed(1) + " s"]);
     }
@@ -763,7 +773,7 @@
     };
 
     $("#evalSub").textContent =
-      (ev.split ? ev.split.toUpperCase() + " split Â· " : "") +
+      (ev.split ? ev.split.toUpperCase() + " split Ã‚Â· " : "") +
       ev.count + " queries evaluated with examiner-cited ground truth.";
 
     $("#metrics").innerHTML =
@@ -778,7 +788,7 @@
       pts(last.mrr, first.mrr) + "</span></div>" +
       '<div class="metric"><small>Queries evaluated</small><b>' +
       ev.count + '</b><span style="color:var(--ink3)">' +
-      (ev.split ? ev.split.toUpperCase() + " Â· " : "") +
+      (ev.split ? ev.split.toUpperCase() + " Ã‚Â· " : "") +
       "Dataset " + esc(ev.version || "real") + "</span></div>";
 
     renderChart();
@@ -839,8 +849,8 @@
           '<td class="num">' + s.custom_mrr.toFixed(4) + "</td></tr>";
       }).join("");
       return '<div class="ragas-dataset">' +
-        "<h4>" + esc(ds.split) + " · " + ds.query_count +
-        " queries · Recall/Precision @" + data.k + "</h4>" +
+        "<h4>" + esc(ds.split) + " Â· " + ds.query_count +
+        " queries Â· Recall/Precision @" + data.k + "</h4>" +
         '<table><thead><tr><th>Pipeline stage</th>' +
         '<th class="num">RAGAS Recall@' + data.k + "</th>" +
         '<th class="num">RAGAS Precision@' + data.k + "</th>" +
@@ -848,8 +858,8 @@
         "</tbody></table>" +
         '<p class="note">Scoring consistency: max difference ' +
         Number(ds.max_abs_diff).toFixed(6) +
-        " · Stored mismatches: " + esc(ds.mismatches) +
-        " · Source: " + esc(ds.source) + "</p></div>";
+        " Â· Stored mismatches: " + esc(ds.mismatches) +
+        " Â· Source: " + esc(ds.source) + "</p></div>";
     }).join("") + '<p class="note">' + esc(data.note) + "</p>";
   }
 

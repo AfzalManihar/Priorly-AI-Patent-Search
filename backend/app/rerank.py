@@ -34,36 +34,57 @@ class LexicalScorer:
     name = "lexical"
     coverage_threshold = 0.45  # calibrated on the sample data; paraphrase scores low with a lexical scorer
 
+    def __init__(self):
+        self._scored = 0
+
     def score_pairs(self, pairs: list[tuple[str, str]]) -> list[float]:
+        self._scored += len(pairs)
         return [lexical_score(q, p) for q, p in pairs]
+
+    def stats(self) -> dict:
+        return {"scored": self._scored, "cached": 0}
 
 
 class CrossEncoderScorer:
     name = "bge"
     coverage_threshold = 0.5
 
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, cache: bool = True):
         try:
             from sentence_transformers import CrossEncoder
         except ImportError as exc:  # pragma: no cover
             raise DependencyError("Install requirements-ml.txt to use the bge reranker") from exc
         self.model = CrossEncoder(model_name)
-        self._cache: dict[tuple[str, str], float] = {}  # identical (query, passage) pairs recur across configs
+        # Identical (query, passage) pairs get the identical score, so remembering them never changes a ranking.
+        # RERANK_CACHE=off turns the memory off, so every search runs the model on every pair again.
+        self.cache_enabled = cache
+        self._cache: dict[tuple[str, str], float] = {}
+        self._scored = 0
+        self._reused = 0
 
     def score_pairs(self, pairs: list[tuple[str, str]]) -> list[float]:
         if not pairs:
             return []
-        missing = list(dict.fromkeys(p for p in pairs if p not in self._cache))
+        known = self._cache if self.cache_enabled else {}
+        missing = list(dict.fromkeys(p for p in pairs if p not in known))
+        fresh: dict[tuple[str, str], float] = {}
         if missing:
             logits = self.model.predict(missing, batch_size=4)
             for pair, x in zip(missing, logits):
-                self._cache[pair] = 1.0 / (1.0 + math.exp(-float(x)))
-        return [self._cache[p] for p in pairs]
+                fresh[pair] = 1.0 / (1.0 + math.exp(-float(x)))
+            if self.cache_enabled:
+                self._cache.update(fresh)
+        self._scored += len(missing)
+        self._reused += len(pairs) - len(missing)
+        return [fresh[p] if p in fresh else known[p] for p in pairs]
+
+    def stats(self) -> dict:
+        return {"scored": self._scored, "cached": self._reused}
 
 
 def build_scorer(settings):
     if settings.rerank_backend == "lexical":
         return LexicalScorer()
     if settings.rerank_backend == "bge":
-        return CrossEncoderScorer(settings.rerank_model)
+        return CrossEncoderScorer(settings.rerank_model, cache=getattr(settings, "rerank_cache", True))
     raise ValueError(f"Unknown RERANK_BACKEND: {settings.rerank_backend}")

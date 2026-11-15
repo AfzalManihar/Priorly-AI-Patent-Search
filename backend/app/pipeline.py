@@ -171,6 +171,7 @@ class Engine:
         timings: dict[str, float] = {}
         degraded: list[str] = []
         started = time.perf_counter()
+        work_before = self._work_counters()
 
         def stage(name: str, status: str, **extra) -> dict:
             return {
@@ -481,10 +482,30 @@ class Engine:
                     "rrf_k": s.rrf_k,
                 },
                 "timings_ms": timings,
+                "work": self._work_since(work_before),
             },
         }
 
     # ----------------------------------------------------------------- helpers
+
+    def _work_counters(self) -> dict:
+        stats = getattr(self.scorer, "stats", None)
+        scorer = stats() if callable(stats) else {"scored": 0, "cached": 0}
+        store = getattr(self.llm, "store", None)
+        llm = store.cache_stats() if store is not None else {"hits": 0, "misses": 0}
+        return {"scored": scorer["scored"], "reused": scorer["cached"], "llm_hits": llm["hits"], "llm_misses": llm["misses"]}
+
+    def _work_since(self, before: dict) -> dict:
+        """What this search really computed, and what came from a cache. Counters are shared, so a search that
+        overlaps another one on the same server can include some of its work."""
+        now = self._work_counters()
+        return {
+            "rerank_pairs_scored": now["scored"] - before["scored"],
+            "rerank_pairs_from_cache": now["reused"] - before["reused"],
+            "llm_calls": now["llm_misses"] - before["llm_misses"],
+            "llm_from_cache": now["llm_hits"] - before["llm_hits"],
+            "rerank_cache": bool(getattr(self.scorer, "cache_enabled", False)),
+        }
 
     def _rerank(
         self,

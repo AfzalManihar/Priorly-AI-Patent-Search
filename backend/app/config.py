@@ -54,6 +54,7 @@ class Settings:
     rerank_depth: int = 50
     trace_depth: int = 200
     chunk_pool: int = 5
+    rerank_cache: bool = True  # RERANK_CACHE=off makes the reranker score every pair again on every search
 
     # Service limits
     rate_limit_per_min: int = 60
@@ -86,6 +87,7 @@ class Settings:
             rrf_k=int(_env("RRF_K", "60")),
             candidates=int(_env("CANDIDATES", "50")),
             rerank_depth=int(_env("RERANK_DEPTH", "50")),
+            rerank_cache=_env("RERANK_CACHE", "on").strip().lower() not in ("off", "0", "false", "no"),
             rate_limit_per_min=int(_env("RATE_LIMIT_PER_MIN", "60")),
             cors_origins=[o.strip() for o in _env("CORS_ORIGINS", "").split(",") if o.strip()],
             access_token=_env("PRIORLY_ACCESS_TOKEN", ""),
