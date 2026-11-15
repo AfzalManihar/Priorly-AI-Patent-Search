@@ -25,6 +25,10 @@
       <button data-view="search" aria-current="page"><span data-i="search"></span>New search</button>
       <button data-view="eval"><span data-i="chart"></span>Benchmark</button>
       <button data-view="saved"><span data-i="bookmark"></span>Saved reports<span class="count" id="savedCount">3</span></button>
+      <button data-view="lab"><span data-i="layers"></span>Experiments</button>
+      <button data-view="playground"><span data-i="play"></span>Strategy playground</button>
+      <button data-view="inspector"><span data-i="search"></span>Retrieval inspector</button>
+      <button data-view="obs"><span data-i="trace"></span>Observability</button>
       <button data-view="settings"><span data-i="settings"></span>Pipeline settings</button>
     </nav>
     <div class="foot">
@@ -50,10 +54,13 @@
               <label class="tg"><input type="checkbox" id="optHyde" checked><span class="sw"></span>HyDE</label>
               <label class="tg"><input type="checkbox" id="optHybrid" checked><span class="sw"></span>Hybrid search</label>
               <label class="tg"><input type="checkbox" id="optRerank" checked><span class="sw"></span>Rerank</label>
+              <label class="tg"><input type="checkbox" id="optDense" checked><span class="sw"></span>Vector search</label>
+              <label class="tg"><input type="checkbox" id="optPrf"><span class="sw"></span>Query expansion (PRF)</label>
               <span class="spacer"></span>
               <label class="tg">Show <select id="optK" aria-label="Number of results"><option value="5">top 5</option><option value="10" selected>top 10</option></select></label>
               <button class="btn primary" id="runBtn"><span data-i="play"></span>Find prior art</button>
             </div>
+            <div id="defaultChip" class="default-chip"></div>
             <div class="prog" id="prog" aria-live="polite"></div>
           </div>
 
@@ -66,8 +73,8 @@
             <div id="elements"></div>
           </div>
           <div class="card">
-            <h3>BGE relevance signals</h3>
-            <div id="coverage"><p style="color:var(--ink3);font-size:13.5px">Run a search to see BGE similarity signals for each claim element. These are not verified disclosures.</p></div>
+            <h3>Coverage in results</h3>
+            <div id="coverage"><p style="color:var(--ink3);font-size:13.5px">Run a search to see which elements the results cover.</p></div>
           </div>
           <div class="card">
             <h3>This run</h3>
@@ -131,7 +138,7 @@
             <input class="inp" type="number" value="50" min="10" max="100" name="depth">
             <span class="hint">Fused candidates sent to the cross-encoder.</span></label>
           <label>LLM for decomposition and reasons
-            <select class="inp" name="llm"><option value="openai/gpt-oss-120b">Groq - openai/gpt-oss-120b</option></select>
+            <select class="inp" name="llm"><option>Groq, llama-3.3-70b</option><option>OpenAI, gpt-4o-mini</option></select>
             <span class="hint">Writes elements, HyDE passages, and result reasons.</span></label>
           <p id="settingsNote" class="note" style="grid-column:1/-1;margin:0"></p>
           <div style="grid-column:1/-1;display:flex;gap:8px"><button class="btn primary" type="submit">Save settings</button><button class="btn" type="reset">Reset to defaults</button></div>
@@ -146,6 +153,10 @@
         </div>
       </div>
     </section>
+    <section class="view" id="v-lab"></section>
+    <section class="view" id="v-playground"></section>
+    <section class="view" id="v-inspector"></section>
+    <section class="view" id="v-obs"></section>
   </main>
 </div>
 
@@ -158,5 +169,6 @@
 <script src="js/data.js"></script>
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>
+<script src="js/lab.js"></script>
 </body>
 </html>

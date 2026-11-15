@@ -24,13 +24,14 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
+from .chunkers import CHUNKERS, get_chunker
 from .corpus import load_corpus
 from .llm import LLMError, make_llm
 from .pipeline import Engine, Options
 from .report_pdf import build_report_pdf
 from .rerank import build_scorer
 from .retrievers import BM25Index, DependencyError, build_dense
-from .schemas import ReportRequest, SearchRequest, SettingsModel
+from .schemas import PlaygroundRequest, ReportRequest, SearchRequest, SettingsModel
 from .store import Store
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -138,7 +139,11 @@ def build_state(settings: Settings) -> State:
     for key in RUNTIME_SETTINGS:
         if key in saved:
             setattr(settings, key, int(saved[key]))
-    corpus = load_corpus(settings.corpus_path)
+    if settings.chunking not in CHUNKERS:
+        raise ValueError(f"CHUNKING={settings.chunking!r} is not one of {', '.join(CHUNKERS)}")
+    corpus = load_corpus(settings.corpus_path, chunker=get_chunker(settings.chunking))
+    if settings.chunking != "claim_aware":  # each chunking keeps its own vector index
+        settings.qdrant_collection = f"{settings.qdrant_collection}_{settings.chunking}"
     engine = Engine(
         settings, corpus,
         bm25=BM25Index(corpus),
@@ -356,7 +361,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "embedding_model": saved.get("embedding_model", cfg.embed_model),
             "reranker": saved.get("reranker", cfg.rerank_model),
-            "llm_model": cfg.groq_model,
+            "llm_model": saved.get("llm_model", cfg.groq_model),
             "rrf_k": cfg.rrf_k, "candidates": cfg.candidates, "rerank_depth": cfg.rerank_depth,
             "backends": {"dense": cfg.dense_backend, "rerank": cfg.rerank_backend, "llm": cfg.llm_backend},
             "requires_restart": ["embedding_model", "reranker", "llm_model"],
@@ -376,6 +381,99 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         st.store.put_settings(changes)
         return current_settings(st)
 
+    # -------------------------------------------------------------- experiments
+    def results_dir(st: State):
+        return st.settings.corpus_path.parent / "results"
+
+    def read_json(path):
+        return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+
+    @app.get("/api/experiments")
+    def experiments(request: Request):
+        data = read_json(results_dir(state(request)) / "grid.json")
+        return data if data else {"available": False, "message": "No comparison run yet. Run `python -m eval.grid` first."}
+
+    @app.get("/api/default-config")
+    def default_config(request: Request):
+        st = state(request)
+        best = read_json(results_dir(st) / "best_config.json")
+        live = {"chunking": st.settings.chunking, "dense_backend": st.engine.dense.name, "rerank_backend": st.engine.scorer.name,
+                "llm_backend": st.engine.llm.name}
+        if not best:
+            return {"available": False, "live": live, "chunkers": {k: v[0] for k, v in CHUNKERS.items()}}
+        opts = best["options"]
+        return {"available": True, "config": best, "live": live, "chunkers": {k: v[0] for k, v in CHUNKERS.items()},
+                "chunking_matches_live": opts["chunking"] == st.settings.chunking,
+                "pipeline_options": {k: opts[k] for k in ("decompose", "hyde", "hybrid", "dense", "prf", "rerank")}}
+
+    @app.get("/api/queries")
+    def example_queries(request: Request, limit: int = Query(default=60, ge=1, le=200)):
+        st = state(request)
+        raw = read_json(st.settings.queries_path) if st.settings.queries_path else None
+        if not raw:
+            return {"queries": []}
+        grid = read_json(results_dir(st) / "grid.json")
+        used = {r["id"] for r in grid["combos"][0]["per_query"]} if grid and grid["combos"] else set()
+        rows = [q for q in raw["queries"] if not used or q["id"] in used]
+        return {"queries": [{"id": q["id"], "type": q["type"], "year": q["year"], "patent_id": q["patent_id"], "claim": q["claim"],
+                             "relevant": len(q["relevant"])} for q in rows[:limit]]}
+
+    @app.post("/api/playground")
+    def playground(body: PlaygroundRequest, request: Request):
+        """Run one claim through up to four pipeline configurations and score each against the examiner citations."""
+        from dataclasses import replace
+
+        from eval.metrics import average_precision, hit_rate_at_k, ndcg_at_k, precision_at_k, recall_at_k, reciprocal_rank
+        from .retrievers import Constraints
+
+        st = state(request)
+        wait = st.limiter.check(request.client.host if request.client else "local")
+        if wait is not None:
+            raise ApiError(429, "rate_limited", f"Too many searches. Retry in {wait} seconds.", {"Retry-After": str(wait)})
+        claim, cons, relevant, meta = (body.claim or "").strip(), None, None, None
+        if body.query_id:
+            raw = read_json(st.settings.queries_path) or {"queries": []}
+            q = next((x for x in raw["queries"] if x["id"] == body.query_id), None)
+            if not q:
+                raise ApiError(404, "not_found", "That benchmark query does not exist.")
+            claim = q["claim"]
+            cons = Constraints(exclude_ids=frozenset([q["patent_id"]]), max_year=q["year"] - 1)
+            relevant = {p for p in q["relevant"] if p in st.engine.corpus.patents and st.engine.corpus.patents[p].year <= cons.max_year}
+            meta = {"id": q["id"], "type": q["type"], "patent_id": q["patent_id"], "relevant": sorted(relevant)}
+        if len(claim) < st.settings.claim_min_chars or len(claim) > st.settings.claim_max_chars:
+            raise ApiError(400, "claim_length", "Provide a claim between the minimum and maximum length.")
+        runs = []
+        for cfg in body.configs:
+            t0 = time.perf_counter()
+            payload = st.engine.search(claim, replace(Options(**cfg.options.model_dump()), explain=False), 10, cons)
+            st.store.save_search(payload["search_id"], {"claim": claim, "options": cfg.options.model_dump(), "k": 10, "source": "playground"}, payload)
+            st.metrics.record(payload)
+            ranked = [r["id"] for r in payload["results"]]
+            row = {"name": cfg.name or "config", "options": cfg.options.model_dump(), "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+                   "timings_ms": payload.get("timings_ms", {}), "work": payload.get("work", {}), "degraded": payload.get("degraded_stages", []),
+                   "results": [{"id": r["id"], "title": r["title"], "year": r["year"], "rank": i, "relevant": bool(relevant and r["id"] in relevant),
+                                "dense": r.get("dense"), "bm25": r.get("bm25")} for i, r in enumerate(payload["results"], 1)]}
+            if relevant:
+                row["metrics"] = {"recall@10": recall_at_k(ranked, relevant, 10), "precision@10": precision_at_k(ranked, relevant, 10),
+                                  "mrr": reciprocal_rank(ranked, relevant), "ndcg@10": ndcg_at_k(ranked, relevant, 10),
+                                  "map": average_precision(ranked, relevant, 10), "hit@10": hit_rate_at_k(ranked, relevant, 10)}
+            runs.append(row)
+        return {"claim": claim, "query": meta, "runs": runs}
+
+    @app.get("/api/traces")
+    def traces(request: Request, limit: int = Query(default=30, ge=1, le=200)):
+        return {"traces": state(request).store.recent_searches(limit)}
+
+    @app.get("/api/experiments/report.pdf")
+    def experiments_pdf(request: Request):
+        from .report_research import build_research_pdf
+
+        data = read_json(results_dir(state(request)) / "grid.json")
+        if not data:
+            raise ApiError(404, "no_experiments", "No comparison run yet. Run `python -m eval.grid` first.")
+        return Response(build_research_pdf(data), media_type="application/pdf",
+                        headers={"Content-Disposition": 'attachment; filename="priorly-research-report.pdf"'})
+
     # ------------------------------------------------------------------- health
     @app.get("/api/health")
     def health(request: Request):
@@ -388,6 +486,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "rerank_backend": eng.scorer.name,
             "llm_backend": eng.llm.name,
             "benchmark_available": st.settings.benchmark_path.exists(),
+            "chunking": st.settings.chunking,
         }
 
     @app.get("/api/metrics")

@@ -43,7 +43,7 @@ def test_cache_off_scores_every_search_again_with_identical_scores():
 
 
 def test_rerank_cache_setting_defaults_on_and_can_be_turned_off(monkeypatch):
-    monkeypatch.setenv("RERANK_CACHE", "on")
+    monkeypatch.delenv("RERANK_CACHE", raising=False)
     assert Settings.from_env().rerank_cache is True
     for value in ("off", "OFF", "0", "false", "no"):
         monkeypatch.setenv("RERANK_CACHE", value)

@@ -1,4 +1,4 @@
-﻿"""Corpus loading and chunking.
+"""Corpus loading and chunking.
 
 Corpus file format (JSON Lines), one patent per line:
   {"id": "US 9,104,382 B2", "title": "...", "assignee": "...", "year": 2015,
@@ -89,12 +89,12 @@ def chunk_patent(patent: Patent, start_idx: int = 0, max_chars: int = 1200) -> l
 
 
 class Corpus:
-    def __init__(self, patents: list[Patent], max_chars: int = 1200):
+    def __init__(self, patents: list[Patent], max_chars: int = 1200, chunker=None):
         self.patents: dict[str, Patent] = {p.id: p for p in patents}
         self.chunks: list[Chunk] = []
         self.by_patent: dict[str, list[int]] = {}
         for patent in patents:
-            new = chunk_patent(patent, start_idx=len(self.chunks), max_chars=max_chars)
+            new = (chunker or chunk_patent)(patent, start_idx=len(self.chunks), max_chars=max_chars)
             self.chunks.extend(new)
             self.by_patent[patent.id] = [c.idx for c in new]
         self.years = np.array([self.patents[c.patent_id].year for c in self.chunks])
@@ -113,7 +113,7 @@ class Corpus:
         return allowed
 
 
-def load_corpus(path: Path, max_chars: int = 1200) -> Corpus:
+def load_corpus(path: Path, max_chars: int = 1200, chunker=None) -> Corpus:
     patents: list[Patent] = []
     with open(path, encoding="utf-8") as handle:
         for line in handle:
@@ -135,4 +135,4 @@ def load_corpus(path: Path, max_chars: int = 1200) -> Corpus:
             )
     if not patents:
         raise ValueError(f"No patents found in {path}")
-    return Corpus(patents, max_chars=max_chars)
+    return Corpus(patents, max_chars=max_chars, chunker=chunker)

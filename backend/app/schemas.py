@@ -1,4 +1,4 @@
-"""Request models (PRD section 10)."""
+﻿"""Request models (PRD section 10)."""
 from __future__ import annotations
 
 from typing import Literal
@@ -12,6 +12,8 @@ class OptionsModel(BaseModel):
     hyde: bool = True
     hybrid: bool = True
     rerank: bool = True
+    dense: bool = True
+    prf: bool = False
 
 
 class SearchRequest(BaseModel):
@@ -36,3 +38,16 @@ class SettingsModel(BaseModel):
     rrf_k: int | None = Field(default=None, ge=1, le=200)
     candidates: int | None = Field(default=None, ge=10, le=200)
     rerank_depth: int | None = Field(default=None, ge=10, le=100)
+
+
+class PlaygroundConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(default="", max_length=80)
+    options: OptionsModel = Field(default_factory=OptionsModel)
+
+
+class PlaygroundRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query_id: str | None = None
+    claim: str | None = None
+    configs: list[PlaygroundConfig] = Field(min_length=1, max_length=4)

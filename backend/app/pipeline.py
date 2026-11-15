@@ -31,6 +31,15 @@ class Options:
     hybrid: bool = True
     rerank: bool = True
     explain: bool = True
+    dense: bool = True  # False = keyword (BM25) retrieval only
+    prf: bool = False  # pseudo-relevance feedback: expand the query with terms from the top keyword hits
+
+
+class _NoDense:
+    name = "off"
+
+    def search(self, query, n, cons):
+        return []
 
 
 def _ms(start: float) -> float:
@@ -138,6 +147,7 @@ class Engine:
         self.dense = dense
         self.scorer = scorer
         self.llm = llm
+        self._prf = None
 
     # ------------------------------------------------------------------ public
 
@@ -183,18 +193,26 @@ class Engine:
 
         # 1. decompose ---------------------------------------------------------
 
+        query_text = claim
+        if opts.prf:
+            if self._prf is None:
+                from .prf import Prf
+
+                self._prf = Prf(corpus, self.bm25)
+            query_text = self._prf.expand(claim, cons)
+
         if opts.decompose:
             yield stage("decompose", "running")
             t0 = time.perf_counter()
 
             try:
-                texts = self.llm.decompose(claim)
+                texts = self.llm.decompose(query_text)
 
             except LLMError as exc:
                 log.warning(
                     "decomposition failed, falling back to rules: %s", str(exc)[:200]
                 )
-                texts = heuristic_decompose(claim)
+                texts = heuristic_decompose(query_text)
                 degraded.append("decompose")
 
             timings["decompose"] = _ms(t0)
@@ -206,7 +224,7 @@ class Engine:
             )
 
         else:
-            texts = [claim]
+            texts = [query_text]
             yield stage("decompose", "skipped")
 
         # 2. expand (HyDE) -----------------------------------------------------
@@ -257,7 +275,7 @@ class Engine:
             dense_lists.append(
                 aggregate_to_patents(
                     corpus,
-                    self.dense.search(dq, s.trace_depth, cons),
+                    (self.dense if opts.dense else _NoDense()).search(dq, s.trace_depth, cons),
                 )
             )
 

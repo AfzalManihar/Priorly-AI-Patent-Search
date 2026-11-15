@@ -1,5 +1,5 @@
 
-﻿(function () {
+(function () {
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var RRF_K = 60;
@@ -88,6 +88,7 @@
     if (view === "eval") renderEval();
     if (view === "saved") renderSaved();
     if (view === "settings") loadSettings();
+    if (window.Lab) window.Lab.onShow(view);
 
     try { history.replaceState(null, "", "#" + view); } catch (e) {}
     window.scrollTo(0, 0);
@@ -120,6 +121,8 @@
       hyde: $("#optHyde").checked,
       hybrid: $("#optHybrid").checked,
       rerank: $("#optRerank").checked,
+      dense: $("#optDense").checked,
+      prf: $("#optPrf").checked,
       k: +$("#optK").value
     };
   }
@@ -305,7 +308,9 @@
       decompose: o.decompose,
       hyde: o.hyde,
       hybrid: o.hybrid,
-      rerank: o.rerank
+      rerank: o.rerank,
+      dense: o.dense !== false,
+      prf: !!o.prf
     };
 
     return PriorlyAPI.searchStream(claim.value.trim(), options, o.k, function (ev) {
@@ -425,13 +430,13 @@
         '<div style="font-size:13px;color:var(--ink3);margin-top:2px">' +
         esc(p.id) + " &middot; " + esc(p.assignee) + " &middot; " +
         p.year + " &middot; " + esc(p.cpc) + "</div>" +
-        '<div class="head">' + (p.elN ? '<span class="signal-label">BGE relevance:</span>' + chips(p) : "") +
+        '<div class="head">' + (p.elN ? chips(p) : "") +
         (kwOnly ? '<span class="chip flag">Missed by vector search</span>' : "") +
         "</div>" +
         '<p class="quote">' + p.passage +
         ' <span style="font-family:var(--sans);font-size:12px;color:var(--ink3)">' +
         esc(p.loc) + "</span></p>" +
-        '<p class="why"><b>Passage assessment (Groq):</b> ' + esc(p.why) + "</p></div>" +
+        '<p class="why">' + esc(p.why) + "</p></div>" +
         '<div class="side-col"><div class="score">' + sc.v +
         "<small>" + sc.l + "</small></div>" +
         '<div class="actions-row">' +
@@ -453,7 +458,7 @@
 
     if (res.elements.length === 1 && res.elements[0].whole_claim) {
       $("#coverage").innerHTML =
-        '<p style="color:var(--ink3);font-size:13.5px">BGE element relevance signals appear when the claim is decomposed.</p>';
+        '<p style="color:var(--ink3);font-size:13.5px">Element match signals are shown when the claim is decomposed.</p>';
       return;
     }
 
@@ -469,7 +474,7 @@
         Math.round(c / Math.max(n, 1) * 100) +
         '%"></i></div><span>' + c + "/" + n + "</span></div>";
     }).join("") +
-      '<p style="font-size:12.5px;color:var(--ink3);margin-top:8px">Counts show BGE similarity signals among displayed results, not confirmed patent disclosure. Groq passage assessments are independent.</p>';
+      '<p style="font-size:12.5px;color:var(--ink3);margin-top:8px">Model-scored relevance matches, not verified patent disclosure. </p>';
   }
 
   function renderRunInfo(res, o, secs) {
@@ -773,7 +778,7 @@
     };
 
     $("#evalSub").textContent =
-      (ev.split ? ev.split.toUpperCase() + " split Ã‚Â· " : "") +
+      (ev.split ? ev.split.toUpperCase() + " split · " : "") +
       ev.count + " queries evaluated with examiner-cited ground truth.";
 
     $("#metrics").innerHTML =
@@ -788,7 +793,7 @@
       pts(last.mrr, first.mrr) + "</span></div>" +
       '<div class="metric"><small>Queries evaluated</small><b>' +
       ev.count + '</b><span style="color:var(--ink3)">' +
-      (ev.split ? ev.split.toUpperCase() + " Ã‚Â· " : "") +
+      (ev.split ? ev.split.toUpperCase() + " · " : "") +
       "Dataset " + esc(ev.version || "real") + "</span></div>";
 
     renderChart();
@@ -849,8 +854,8 @@
           '<td class="num">' + s.custom_mrr.toFixed(4) + "</td></tr>";
       }).join("");
       return '<div class="ragas-dataset">' +
-        "<h4>" + esc(ds.split) + " Â· " + ds.query_count +
-        " queries Â· Recall/Precision @" + data.k + "</h4>" +
+        "<h4>" + esc(ds.split) + " · " + ds.query_count +
+        " queries · Recall/Precision @" + data.k + "</h4>" +
         '<table><thead><tr><th>Pipeline stage</th>' +
         '<th class="num">RAGAS Recall@' + data.k + "</th>" +
         '<th class="num">RAGAS Precision@' + data.k + "</th>" +
@@ -858,8 +863,8 @@
         "</tbody></table>" +
         '<p class="note">Scoring consistency: max difference ' +
         Number(ds.max_abs_diff).toFixed(6) +
-        " Â· Stored mismatches: " + esc(ds.mismatches) +
-        " Â· Source: " + esc(ds.source) + "</p></div>";
+        " · Stored mismatches: " + esc(ds.mismatches) +
+        " · Source: " + esc(ds.source) + "</p></div>";
     }).join("") + '<p class="note">' + esc(data.note) + "</p>";
   }
 
@@ -1003,7 +1008,6 @@
         if (!input || value == null) return;
 
         if (
-          name !== "llm" &&
           input.tagName === "SELECT" &&
           !$$("option", input).some(function (o) {
             return o.value === String(value) || o.text === String(value);

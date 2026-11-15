@@ -43,6 +43,18 @@ class Store:
             )
             self.db.commit()
 
+    def recent_searches(self, limit: int = 30) -> list[dict]:
+        with self.lock:
+            rows = self.db.execute("SELECT * FROM searches ORDER BY created DESC LIMIT ?", (limit,)).fetchall()
+        out = []
+        for row in rows:
+            req, res = json.loads(row["request"]), json.loads(row["response"])
+            out.append({"search_id": row["id"], "created": row["created"], "claim": req.get("claim", "")[:160],
+                        "options": res.get("options", {}), "timings_ms": res.get("timings_ms", {}), "work": res.get("work", {}),
+                        "degraded": res.get("degraded_stages", []), "results": len(res.get("results", [])),
+                        "candidates": res.get("candidates_considered")})
+        return out
+
     def get_search(self, search_id: str) -> dict | None:
         with self.lock:
             row = self.db.execute("SELECT * FROM searches WHERE id=?", (search_id,)).fetchone()

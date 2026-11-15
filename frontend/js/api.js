@@ -79,6 +79,17 @@
   window.PriorlyAPI = {
     ApiError: ApiError,
     health: function () { return request("GET", "/api/health"); },
+    get: function (path) { return request("GET", path); },
+    post: function (path, body) { return request("POST", path, body); },
+    downloadFile: function (path, filename) {
+      return fetch(base + path, { headers: accessHeaders(false) }).then(function (r) {
+        if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { throw fail(r.status, j); });
+        return r.blob();
+      }).then(function (blob) {
+        var u = URL.createObjectURL(blob), a = document.createElement("a");
+        a.href = u; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u);
+      });
+    },
     searchStream: searchStream,
     benchmark: function () { return request("GET", "/api/benchmark"); },
     listReports: function () { return request("GET", "/api/reports").then(function (j) { return j.reports; }); },
