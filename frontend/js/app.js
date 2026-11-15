@@ -1003,6 +1003,7 @@
         if (!input || value == null) return;
 
         if (
+          name !== "llm" &&
           input.tagName === "SELECT" &&
           !$$("option", input).some(function (o) {
             return o.value === String(value) || o.text === String(value);

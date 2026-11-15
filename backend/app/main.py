@@ -356,7 +356,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "embedding_model": saved.get("embedding_model", cfg.embed_model),
             "reranker": saved.get("reranker", cfg.rerank_model),
-            "llm_model": saved.get("llm_model", cfg.groq_model),
+            "llm_model": cfg.groq_model,
             "rrf_k": cfg.rrf_k, "candidates": cfg.candidates, "rerank_depth": cfg.rerank_depth,
             "backends": {"dense": cfg.dense_backend, "rerank": cfg.rerank_backend, "llm": cfg.llm_backend},
             "requires_restart": ["embedding_model", "reranker", "llm_model"],

@@ -32,7 +32,7 @@ class SettingsModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     embedding_model: str | None = None
     reranker: str | None = None
-    llm_model: str | None = None
+    llm_model: Literal["openai/gpt-oss-120b"] | None = None
     rrf_k: int | None = Field(default=None, ge=1, le=200)
     candidates: int | None = Field(default=None, ge=10, le=200)
     rerank_depth: int | None = Field(default=None, ge=10, le=100)
