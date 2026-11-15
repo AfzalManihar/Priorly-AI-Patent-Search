@@ -320,3 +320,94 @@ td b{font-weight:600}
 .default-chip{margin-top:10px;font-size:13px;color:var(--ink2);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .warnbox{border:1px solid var(--line);background:var(--warn-soft);color:var(--warn);border-radius:var(--r);padding:10px 14px;font-size:13px}
 .s0{background:#2f5fd0}.s1{background:#e0a21a}.s2{background:#16a374}.s3{background:#8a5cf0}.s4{background:#d9534f}.s5{background:#55627a}
+
+/* Search option help — compact reference-matched UI */
+.toolbar .option-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 4px;
+  border: 1px solid #91a4b8;
+  border-radius: 50%;
+  color: #647b91;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  position: relative;
+  vertical-align: middle;
+  flex: 0 0 auto;
+}
+.toolbar .option-help::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  transform: translate(-50%, 4px);
+  width: 230px;
+  padding: 9px 11px;
+  border-radius: 6px;
+  background: #172433;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .2);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 100;
+  transition: opacity .15s ease, transform .15s ease;
+}
+.toolbar .option-help:hover::after,
+.toolbar .option-help:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+.toolbar .option-help:focus-visible {
+  outline: 2px solid #8bb8e8;
+  outline-offset: 2px;
+}
+.search-guide {
+  margin-top: 12px;
+  padding: 13px 15px;
+  border: 1px solid #cfe0f1;
+  border-radius: 9px;
+  background: #f5f9fd;
+}
+.search-guide-heading {
+  margin-bottom: 10px;
+  color: #29445f;
+  font-size: 12px;
+  font-weight: 700;
+}
+.search-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 22px;
+  row-gap: 11px;
+}
+.search-guide-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: #61758a;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.search-guide-item strong {
+  color: #304b65;
+  font-size: 11px;
+  font-weight: 700;
+}
+@media (max-width: 650px) {
+  .search-guide-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

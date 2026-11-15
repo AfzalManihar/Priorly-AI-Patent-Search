@@ -50,17 +50,29 @@
             <label class="field-label" for="claim"><span>Patent claim</span><span id="charCount">0 characters</span></label>
             <textarea id="claim" spellcheck="false"></textarea>
             <div class="toolbar">
-              <label class="tg"><input type="checkbox" id="optDecompose" checked><span class="sw"></span>Decompose claim</label>
-              <label class="tg"><input type="checkbox" id="optHyde" checked><span class="sw"></span>HyDE</label>
-              <label class="tg"><input type="checkbox" id="optHybrid" checked><span class="sw"></span>Hybrid search</label>
-              <label class="tg"><input type="checkbox" id="optRerank" checked><span class="sw"></span>Rerank</label>
-              <label class="tg"><input type="checkbox" id="optDense" checked><span class="sw"></span>Vector search</label>
-              <label class="tg"><input type="checkbox" id="optPrf"><span class="sw"></span>Query expansion (PRF)</label>
+              <label class="tg"><input type="checkbox" id="optDecompose" checked><span class="sw"></span>Decompose claim <span class="option-help" tabindex="0" data-tip="Splits the patent claim into smaller technical elements before searching.">i</span></label>
+              <label class="tg"><input type="checkbox" id="optHyde" checked><span class="sw"></span>HyDE <span class="option-help" tabindex="0" data-tip="Creates a hypothetical patent-style passage to improve semantic search.">i</span></label>
+              <label class="tg"><input type="checkbox" id="optHybrid" checked><span class="sw"></span>Hybrid search <span class="option-help" tabindex="0" data-tip="Combines semantic vector search with BM25 keyword search.">i</span></label>
+              <label class="tg"><input type="checkbox" id="optRerank" checked><span class="sw"></span>Rerank <span class="option-help" tabindex="0" data-tip="Re-scores retrieved passages with a cross-encoder to improve their order.">i</span></label>
+              <label class="tg"><input type="checkbox" id="optDense" checked><span class="sw"></span>Vector search <span class="option-help" tabindex="0" data-tip="Finds passages with similar meaning using dense embeddings.">i</span></label>
+              <label class="tg"><input type="checkbox" id="optPrf"><span class="sw"></span>Query expansion (PRF) <span class="option-help" tabindex="0" data-tip="Expands the query with useful terms from initially retrieved passages.">i</span></label>
               <span class="spacer"></span>
               <label class="tg">Show <select id="optK" aria-label="Number of results"><option value="5">top 5</option><option value="10" selected>top 10</option></select></label>
               <button class="btn primary" id="runBtn"><span data-i="play"></span>Find prior art</button>
             </div>
             <div id="defaultChip" class="default-chip"></div>
+<div class="search-guide" id="searchOptionsGuide">
+  <div class="search-guide-heading">Search options guide</div>
+  <div class="search-guide-grid">
+    <div class="search-guide-item"><strong>Decompose claim</strong><span>Breaks a claim into technical elements before retrieval.</span></div>
+    <div class="search-guide-item"><strong>HyDE</strong><span>Generates a hypothetical patent-style passage to improve semantic search.</span></div>
+    <div class="search-guide-item"><strong>Hybrid search</strong><span>Combines semantic vector and BM25 keyword results.</span></div>
+    <div class="search-guide-item"><strong>Rerank</strong><span>Reorders retrieved candidates using a cross-encoder.</span></div>
+    <div class="search-guide-item"><strong>Vector search</strong><span>Finds semantically similar passages using dense embeddings.</span></div>
+    <div class="search-guide-item"><strong>Query expansion (PRF)</strong><span>Expands the query with useful terms from initially retrieved passages.</span></div>
+  </div>
+</div>
+
             <div class="prog" id="prog" aria-live="polite"></div>
           </div>
 
