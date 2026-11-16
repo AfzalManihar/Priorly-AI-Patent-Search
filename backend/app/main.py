@@ -487,6 +487,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "llm_backend": eng.llm.name,
             "benchmark_available": st.settings.benchmark_path.exists(),
             "chunking": st.settings.chunking,
+            "budgets_s": {"stage": st.settings.stage_budget_s, "rerank": st.settings.rerank_budget_s,
+                          "explain": st.settings.explain_budget_s, "coverage_scope": st.settings.coverage_scope},
         }
 
     @app.get("/api/metrics")

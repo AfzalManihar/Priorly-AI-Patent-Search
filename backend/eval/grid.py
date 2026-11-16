@@ -153,7 +153,8 @@ def build_pool(patents: dict, queries: list[dict], size: int, seed: int) -> list
 
 def make_engine(settings: Settings, patents: list, chunking: str, llm, scorer, pool_tag: str) -> Engine:
     corpus = Corpus(patents, chunker=CHUNKERS[chunking][1])
-    cfg = replace(settings, qdrant_collection=f"{settings.qdrant_collection}_{pool_tag}_{chunking}")
+    cfg = replace(settings, qdrant_collection=f"{settings.qdrant_collection}_{pool_tag}_{chunking}",
+                  stage_budget_s=0, rerank_budget_s=0, explain_budget_s=0)  # measure the full pipeline, never a time-truncated one
     return Engine(cfg, corpus, BM25Index(corpus), build_dense(cfg, corpus), scorer, llm)
 
 

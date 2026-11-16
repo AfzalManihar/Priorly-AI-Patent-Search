@@ -62,7 +62,7 @@
         chipHost.innerHTML = '<span class="chip flag">Validated default</span><span>' + esc(optionText(d.pipeline_options)) +
           " &middot; nDCG@10 " + f3(d.config.metrics["ndcg@10"].mean) + ", Recall@10 " + f3(d.config.metrics["recall@10"].mean) +
           '</span><button class="btn ghost sm" type="button" id="resetDefault">Reset to default</button>' +
-          (d.chunking_matches_live ? "" : '<span class="chip">Best chunking is ' + esc(d.config.options.chunking) +
+          (d.chunking_matches_live ? "" : '<span style="flex:1 0 100%;font-size:12.5px;color:var(--ink3)">Best chunking is ' + esc(d.config.options.chunking) +
             ", live index uses " + esc(d.live.chunking) + ". Set CHUNKING=" + esc(d.config.options.chunking) + " and restart to use it.</span>");
         var b = $("#resetDefault");
         if (b) b.onclick = function () { applyOptions(d.pipeline_options); };

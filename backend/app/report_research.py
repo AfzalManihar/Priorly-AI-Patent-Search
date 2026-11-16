@@ -7,7 +7,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .report_pdf import _drawable
 
@@ -18,75 +18,54 @@ def _para(text: str, style) -> Paragraph:
     return Paragraph(_drawable(text).replace("&", "&amp;").replace("<", "&lt;"), style)
 
 
+def _shade(t: float) -> colors.Color:
+    """White to blue for t in 0..1."""
+    t = max(0.0, min(1.0, t))
+    return colors.Color(0.93 - 0.66 * t, 0.95 - 0.52 * t, 1.0 - 0.28 * t)
+
+
 def _heatmap(data: dict, metric: str, title: str):
-    from reportlab.graphics.shapes import Drawing, Rect, String
-
     chunkers = list(data["meta"]["chunkers"])
-    cells = {
-        (c["chunking"], c["retrieval"]): c["metrics"][metric]["mean"]
-        for c in data["combos"] if c["stage"] == "A"
-    }
-    grid = [[cells.get((ch, r)) for r in RET] for ch in chunkers]
-    width, height = 468, max(125, 34 * len(chunkers) + 55)
-    drawing = Drawing(width, height)
-
-    drawing.add(String(8, height - 16, title, fontName="Helvetica-Bold", fontSize=10))
-    left, top, cell_w, cell_h = 125, height - 42, 108, 27
-
-    values = [v for row in grid for v in row if v is not None]
-    low, high = (min(values), max(values)) if values else (0, 1)
-    spread = max(high - low, 1e-9)
-
-    for j, retrieval in enumerate(RET):
-        drawing.add(String(left + j * cell_w + 27, top + 8, RET[retrieval],
-                           fontName="Helvetica-Bold", fontSize=8))
-
-    for i, (chunker, row) in enumerate(zip(chunkers, grid)):
-        y = top - (i + 1) * cell_h
-        label = data["meta"]["chunkers"][chunker]["label"]
-        drawing.add(String(4, y + 9, label[:21], fontName="Helvetica", fontSize=7))
-        for j, value in enumerate(row):
-            x = left + j * cell_w
-            intensity = 0 if value is None else (value - low) / spread
-            shade = 0.94 - 0.55 * intensity
-            drawing.add(Rect(x, y, cell_w - 3, cell_h - 3,
-                             fillColor=colors.Color(shade, shade + 0.015, 1),
-                             strokeColor=colors.HexColor("#c8ccd4"), strokeWidth=0.5))
-            label_text = "-" if value is None else f"{value:.3f}"
-            drawing.add(String(x + 35, y + 8, label_text,
-                               fontName="Helvetica-Bold", fontSize=8,
-                               fillColor=colors.white if intensity > 0.62 else colors.black))
-    return drawing
+    cells = {(c["chunking"], c["retrieval"]): c["metrics"][metric]["mean"] for c in data["combos"] if c["stage"] == "A"}
+    flat = list(cells.values()) or [0.0]
+    lo, hi = min(flat), max(flat)
+    small = ParagraphStyle("hm", fontSize=8, leading=10)
+    rows = [[_para(title, ParagraphStyle("hmt", parent=small, fontSize=9, leading=11))] + [list(RET.values())[i] for i in range(3)]]
+    style = [("FONTSIZE", (0, 0), (-1, -1), 8), ("ALIGN", (1, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+             ("GRID", (0, 0), (-1, -1), 1, colors.white), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eefc"))]
+    for i, ch in enumerate(chunkers, start=1):
+        row = [_para(data["meta"]["chunkers"][ch]["label"], small)]
+        for j, r in enumerate(RET, start=1):
+            v = cells.get((ch, r))
+            row.append("-" if v is None else f"{v:.3f}")
+            if v is not None:
+                style.append(("BACKGROUND", (j, i), (j, i), _shade(0.15 + 0.85 * ((v - lo) / (hi - lo) if hi > lo else 0.5))))
+                if v == hi:
+                    style.append(("BOX", (j, i), (j, i), 1.5, colors.HexColor("#0e7a4f")))
+        rows.append(row)
+    table = Table(rows, colWidths=[62 * mm, 32 * mm, 32 * mm, 32 * mm], rowHeights=[9 * mm] + [10 * mm] * len(chunkers))
+    table.setStyle(TableStyle(style))
+    return table
 
 
 def _bars(data: dict):
-    from reportlab.graphics.shapes import Drawing, Rect, String, Line
+    from reportlab.graphics.shapes import Drawing, Line, Rect, String
 
-    top = sorted(data["combos"], key=lambda c: -c["metrics"]["ndcg@10"]["mean"])[:12]
-    width, height = 468, 245
-    drawing = Drawing(width, height)
-    drawing.add(String(8, height - 14, "Top 12 pipeline combinations by nDCG@10",
-                       fontName="Helvetica-Bold", fontSize=10))
-
-    label_x, chart_x = 5, 245
-    chart_width, row_h = 190, 17
-    max_value = max((c["metrics"]["ndcg@10"]["mean"] for c in top), default=1) or 1
-
-    for i, combo in enumerate(top):
-        y = height - 38 - (i + 1) * row_h
-        metric = combo["metrics"]["ndcg@10"]
-        value = metric["mean"]
-        low, high = metric["ci"]
-        drawing.add(String(label_x, y + 4, combo["label"][:39],
-                           fontName="Helvetica", fontSize=6.5))
-        drawing.add(Rect(chart_x, y, chart_width * value / max_value, 10,
-                         fillColor=colors.HexColor("#2f5fd0"), strokeColor=None))
-        drawing.add(Line(chart_x + chart_width * low / max_value, y + 5,
-                         chart_x + chart_width * high / max_value, y + 5,
-                         strokeColor=colors.HexColor("#333333"), strokeWidth=1))
-        drawing.add(String(chart_x + chart_width + 5, y + 2, f"{value:.3f}",
-                           fontName="Helvetica", fontSize=7))
-    return drawing
+    top = sorted(data["combos"], key=lambda c: -c["metrics"]["ndcg@10"]["mean"])[:14]
+    row, left, width = 12, 250, 470
+    height = row * len(top) + 18
+    d = Drawing(width + 40, height)
+    hi = max(c["metrics"]["ndcg@10"]["ci"][1] for c in top) or 1
+    x = lambda v: left + (width - left) * v / hi
+    for i, c in enumerate(top):
+        y = height - 14 - i * row
+        m = c["metrics"]["ndcg@10"]
+        d.add(String(left - 6, y, _drawable(c["label"])[:62], fontSize=5.5, textAnchor="end"))
+        d.add(Rect(left, y - 2, max(1, x(m["mean"]) - left), 7, fillColor=colors.HexColor("#2f5fd0"), strokeColor=None))
+        d.add(Line(x(m["ci"][0]), y + 1.5, x(m["ci"][1]), y + 1.5, strokeColor=colors.HexColor("#333333"), strokeWidth=0.8))
+        d.add(String(x(m["ci"][1]) + 4, y, f"{m['mean']:.3f}", fontSize=6))
+    d.add(String(left, 2, "nDCG@10, top 14 combinations (bars show 95% confidence interval)", fontSize=6))
+    return d
 
 
 def build_research_pdf(data: dict) -> bytes:
@@ -118,7 +97,7 @@ def build_research_pdf(data: dict) -> bytes:
     s += [PageBreak(), _para("Chunking strategies", h2)]
     for key, c in m["chunkers"].items():
         s.append(_para(f"{c['label']}: {c['description']}", body))
-    s += [Spacer(1, 6), _heatmap(data, "recall@10", "Recall@10: chunking x retrieval"), _heatmap(data, "ndcg@10", "nDCG@10: chunking x retrieval"),
+    s += [Spacer(1, 6), _heatmap(data, "recall@10", "Recall@10"), Spacer(1, 8), _heatmap(data, "ndcg@10", "nDCG@10"),
           PageBreak(), _para("All combinations, ranked by nDCG@10", h2), _bars(data), PageBreak(), _para("Full results", h2)]
     head = ["Combination", "R@10", "R@50", "P@10", "MRR", "nDCG", "MAP", "Hit", "p95 ms"]
     rows = [head]

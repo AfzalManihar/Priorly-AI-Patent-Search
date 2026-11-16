@@ -236,13 +236,117 @@
     return { v: p.score.toFixed(2), l: "similarity" };
   }
 
-  /* ---------- Progress ---------- */
-  function buildProgress() {
-    var prog = $("#prog");
-    prog.classList.add("on");
-    prog.innerHTML = STAGES.map(function (s, i) {
+  /* ---------- Progress ----------
+     Everything shown here is real: stage states and "N of M" counters come from the server as the work happens.
+     The percentage counts finished stages plus the real counter of the stage that is running. Stages without a counter
+     (decompose, retrieve, fuse) show a moving bar instead of a made-up percentage. Expected stage times are the times
+     this browser measured on its own previous searches, used only to weigh the bar and estimate the time left. */
+  var DEFAULT_MS = { decompose: 3000, hyde: 9000, retrieve: 4000, fuse: 300, rerank: 20000, explain: 12000 };
+  var prog = null;
+
+  function loadStageMs() {
+    try {
+      var saved = JSON.parse(localStorage.getItem("priorly.stageMs") || "{}");
+      var out = {};
+      Object.keys(DEFAULT_MS).forEach(function (k) { out[k] = saved[k] > 0 ? saved[k] : DEFAULT_MS[k]; });
+      return out;
+    } catch (e) { return Object.assign({}, DEFAULT_MS); }
+  }
+
+  function saveStageMs(timings, work) {
+    // Only learn from runs that did the real work. A run answered from the caches takes milliseconds and would make
+    // the next cold search look 100% done while it is still scoring.
+    work = work || {};
+    var coldRerank = (work.rerank_pairs_scored || 0) >= (work.rerank_pairs_from_cache || 0) && (work.rerank_pairs_scored || 0) > 0;
+    var coldLlm = (work.llm_calls || 0) > (work.llm_from_cache || 0);
+    var learn = { decompose: coldLlm, hyde: coldLlm, retrieve: true, fuse: true, rerank: coldRerank, explain: coldLlm || coldRerank };
+    try {
+      var saved = loadStageMs();
+      Object.keys(DEFAULT_MS).forEach(function (k) { if (learn[k] && timings && timings[k] > 0) saved[k] = timings[k]; });
+      localStorage.setItem("priorly.stageMs", JSON.stringify(saved));
+    } catch (e) { /* private mode: weights fall back to defaults */ }
+  }
+
+  function buildProgress(o) {
+    var box = $("#prog");
+    box.classList.add("on");
+    box.innerHTML = STAGES.map(function (s, i) {
       return '<div class="pstep" data-i="' + i + '">' + s.n + "</div>";
-    }).join("");
+    }).join("") +
+      '<div class="pwrap"><div class="pbar"><i id="pfill"></i></div>' +
+      '<div class="pmeta"><span id="pnow">Starting&hellip;</span><span id="pclock"></span></div>' +
+      '<ul class="pnotes" id="pnotes"></ul></div>';
+
+    prog = {
+      t0: performance.now(), opts: o, ms: loadStageMs(), done: {}, current: -1, counter: null, stageStart: 0,
+      timer: setInterval(tickProgress, 250)
+    };
+    tickProgress();
+  }
+
+  function endProgress() {
+    if (prog && prog.timer) clearInterval(prog.timer);
+    if (prog) prog.timer = null;
+  }
+
+  function fraction() {
+    var total = 0, got = 0;
+    STAGES.forEach(function (st, i) {
+      if (!st.on(prog.opts)) return;
+      var w = prog.ms[st.key];
+      total += w;
+      if (prog.done[st.key]) got += w;
+      else if (i === prog.current && prog.counter && prog.counter.total > 0) got += w * Math.min(1, prog.counter.done / prog.counter.total);
+    });
+    return { total: total, got: got, pct: total ? got / total : 0 };
+  }
+
+  function tickProgress() {
+    if (!prog) return;
+    var elapsed = (performance.now() - prog.t0) / 1000, f = fraction();
+    var fill = $("#pfill"), clock = $("#pclock"), now = $("#pnow");
+    if (!fill) return;
+
+    var counted = prog.current >= 0 && prog.counter && prog.counter.total > 0;
+    var wait = prog.current >= 0 && !counted && !prog.done[STAGES[prog.current].key];
+    fill.parentNode.classList.toggle("busy", wait);
+    fill.style.width = Math.min(95, Math.max(2, f.pct * 100)).toFixed(1) + "%";  // never 100% before the result arrives
+
+    // A time estimate only while a real counter is moving. Otherwise there is nothing honest to extrapolate from.
+    var left = "";
+    if (counted && prog.counter.done > 0) {
+      var stageSecs = (performance.now() - prog.stageStart) / 1000;
+      var stageLeft = stageSecs * (prog.counter.total - prog.counter.done) / prog.counter.done;
+      var after = 0;
+      STAGES.forEach(function (st, j) { if (j > prog.current && st.on(prog.opts)) after += prog.ms[st.key] / 1000; });
+      left = " · about " + Math.max(1, Math.round(stageLeft + after)) + " s left";
+    }
+    clock.textContent = "Elapsed " + elapsed.toFixed(0) + " s" + left;
+
+    if (prog.current >= 0) {
+      var st = STAGES[prog.current], c = prog.counter;
+      var secs = ((performance.now() - prog.stageStart) / 1000).toFixed(0);
+      now.textContent = st.n + (counted ? ": " + c.done + " of " + c.total + " " + (c.label || "") :
+        " (" + secs + " s" + (secs * 1000 > 1.5 * prog.ms[st.key] ? ", taking longer than usual; still working" : "") + ")");
+    }
+  }
+
+  function noteStage(ev, i) {
+    var list = $("#pnotes");
+    if (!list || i < 0 || !ev.detail) return;
+    var li = document.createElement("li");
+    li.innerHTML = "<b>" + esc(STAGES[i].n) + "</b> " + (ev.ms ? (ev.ms / 1000).toFixed(1) + " s" : "") + " &middot; " + esc(ev.detail);
+    if (ev.status === "degraded") li.className = "warn";
+    list.appendChild(li);
+  }
+
+  function setProgress(i, done, total, label) {
+    if (!prog || i < 0) return;
+    if (prog.current !== i) { prog.current = i; prog.stageStart = performance.now(); }
+    prog.counter = { done: done, total: total, label: label };
+    var el = $$(".pstep")[i];
+    if (el && el.classList.contains("run")) el.textContent = STAGES[i].n + " " + done + "/" + total;
+    tickProgress();
   }
 
   function setStep(i, state) {
@@ -254,16 +358,20 @@
     if (state === "running") {
       el.className = "pstep run";
       el.textContent = name;
+      if (prog) { prog.current = i; prog.counter = null; prog.stageStart = performance.now(); }
     } else if (state === "done") {
       el.className = "pstep done";
       el.innerHTML = icon("check") + name;
+      if (prog) { prog.done[STAGES[i].key] = true; if (prog.current === i) prog.counter = null; }
     } else if (state === "degraded") {
       el.className = "pstep";
       el.innerHTML = name + " (fallback)";
+      if (prog) prog.done[STAGES[i].key] = true;
     } else {
       el.className = "pstep";
       el.textContent = name + " (off)";
     }
+    tickProgress();
   }
 
   function stageIndex(key) {
@@ -288,7 +396,7 @@
     running = true;
     $("#runBtn").setAttribute("aria-busy", "true");
     $("#results").innerHTML = "";
-    buildProgress();
+    buildProgress(o);
 
     var t0 = performance.now();
     var job = live ? runLive(o) : runDemo(o);
@@ -297,6 +405,7 @@
       finish(o, res, (performance.now() - t0) / 1000);
     }).catch(function (err) {
       running = false;
+      endProgress();
       $("#runBtn").removeAttribute("aria-busy");
       $("#prog").classList.remove("on");
       showError(err);
@@ -314,8 +423,10 @@
     };
 
     return PriorlyAPI.searchStream(claim.value.trim(), options, o.k, function (ev) {
-      setStep(stageIndex(ev.stage), ev.status);
+      if (ev.type === "progress") setProgress(stageIndex(ev.stage), ev.done, ev.total, ev.label);
+      else { setStep(stageIndex(ev.stage), ev.status); if (ev.status !== "running") noteStage(ev, stageIndex(ev.stage)); }
     }).then(function (data) {
+      saveStageMs(data.timings_ms, data.work);
       return adapt(data, o);
     });
   }
@@ -354,6 +465,7 @@
 
   function finish(o, res, secs) {
     running = false;
+    endProgress();
     $("#runBtn").removeAttribute("aria-busy");
 
     lastRun = { o: o, res: res, claim: claim.value };

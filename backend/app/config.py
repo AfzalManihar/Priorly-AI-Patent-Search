@@ -56,6 +56,10 @@ class Settings:
     chunk_pool: int = 5
     chunking: str = "claim_aware"  # CHUNKING: one of app.chunkers.CHUNKERS; changing it needs a re-index
     queries_path: Path | None = None
+    stage_budget_s: float = 20.0  # STAGE_BUDGET_S: longest the LLM steps (decompose, HyDE) may take before falling back; 0 = no limit
+    rerank_budget_s: float = 45.0  # RERANK_BUDGET_S: reranks as many top candidates as fit; the rest keep fusion order; 0 = no limit
+    explain_budget_s: float = 60.0  # EXPLAIN_BUDGET_S: explanations not written in time use the template text; 0 = no limit
+    coverage_scope: str = "pool"  # COVERAGE_SCOPE: pool = check claim elements against the passages retrieval surfaced; all = every passage
     rerank_cache: bool = True  # RERANK_CACHE=off makes the reranker score every pair again on every search
 
     # Service limits
@@ -91,6 +95,10 @@ class Settings:
             rerank_depth=int(_env("RERANK_DEPTH", "50")),
             chunking=_env("CHUNKING", "claim_aware"),
             queries_path=Path(_env("QUERIES_PATH", str(Path(_env("CORPUS_PATH", str(sample / "corpus.jsonl"))).parent / "queries.json"))),
+            stage_budget_s=float(_env("STAGE_BUDGET_S", "20")),
+            rerank_budget_s=float(_env("RERANK_BUDGET_S", "45")),
+            explain_budget_s=float(_env("EXPLAIN_BUDGET_S", "60")),
+            coverage_scope=_env("COVERAGE_SCOPE", "pool").strip().lower(),
             rerank_cache=_env("RERANK_CACHE", "on").strip().lower() not in ("off", "0", "false", "no"),
             rate_limit_per_min=int(_env("RATE_LIMIT_PER_MIN", "60")),
             cors_origins=[o.strip() for o in _env("CORS_ORIGINS", "").split(",") if o.strip()],

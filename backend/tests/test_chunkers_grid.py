@@ -111,3 +111,20 @@ def test_experiment_endpoints(tmp_path, monkeypatch):
         assert c.get("/api/traces").json()["traces"], "playground runs show up in the trace list"
         assert c.get("/api/experiments/report.pdf").content[:4] == b"%PDF"
         assert c.post("/api/playground", json={"query_id": "nope", "configs": [{"options": {}}]}).status_code == 404
+
+
+def test_stream_reports_real_progress_for_rerank_and_explain(settings, claim):
+    from app.main import build_state
+    from app.pipeline import Options
+
+    engine = build_state(settings).engine
+    events = list(engine.run_events(claim, Options(decompose=True, hyde=False, hybrid=True, rerank=True, explain=True), 5))
+    progress = [e for e in events if e["type"] == "progress"]
+    for stage in ("rerank", "explain"):
+        mine = [e for e in progress if e["stage"] == stage]
+        assert mine, f"{stage} reported no progress"
+        assert [e["done"] for e in mine] == sorted(e["done"] for e in mine)
+        assert mine[-1]["done"] == mine[-1]["total"] > 0
+    names = [e["stage"] for e in events if e["type"] == "stage" and e["status"] == "running"]
+    assert names.index("rerank") < names.index("explain")
+    assert events[-1]["type"] == "result"
