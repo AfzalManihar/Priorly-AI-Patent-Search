@@ -186,10 +186,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def _hardening(request: Request, call_next):
         request_id = request.headers.get("x-request-id", "")[:64] or uuid.uuid4().hex[:12]
         started = time.perf_counter()
+        # Bypass access-code checks only for requests addressed to localhost.
+        is_localhost = request.url.hostname in {"localhost", "127.0.0.1", "::1"}
         if (request.url.path.startswith("/api")
                 and request.url.path != "/api/health"
                 and request.method != "OPTIONS"
                 and cfg.access_token
+                and not is_localhost
                 and not secrets.compare_digest(
                     request.headers.get("x-priorly-access-token", ""),
                     cfg.access_token,

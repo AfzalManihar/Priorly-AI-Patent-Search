@@ -13,6 +13,7 @@
     layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
     file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
     trace: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+    'shield-check': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
     download: '<path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/>',
     dot: '<circle cx="12" cy="12" r="3"/>'
   };
