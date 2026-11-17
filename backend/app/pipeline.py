@@ -546,7 +546,9 @@ class Engine:
         scorer = stats() if callable(stats) else {"scored": 0, "cached": 0}
         store = getattr(self.llm, "store", None)
         llm = store.cache_stats() if store is not None else {"hits": 0, "misses": 0}
-        return {"scored": scorer["scored"], "reused": scorer["cached"], "llm_hits": llm["hits"], "llm_misses": llm["misses"]}
+        tokens = store.tokens_total() if store is not None else 0
+        return {"scored": scorer["scored"], "reused": scorer["cached"], "llm_hits": llm["hits"], "llm_misses": llm["misses"],
+                "tokens": tokens}
 
     def _work_since(self, before: dict) -> dict:
         """What this search really computed, and what came from a cache. Counters are shared, so a search that
@@ -557,6 +559,7 @@ class Engine:
             "rerank_pairs_from_cache": now["reused"] - before["reused"],
             "llm_calls": now["llm_misses"] - before["llm_misses"],
             "llm_from_cache": now["llm_hits"] - before["llm_hits"],
+            "llm_tokens": now["tokens"] - before["tokens"],
             "rerank_cache": bool(getattr(self.scorer, "cache_enabled", False)),
         }
 

@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import Settings
 from .chunkers import CHUNKERS, get_chunker
 from .corpus import load_corpus
+from .guardrails import BENIGN, REDTEAM, inspect_claim, redact
 from .llm import LLMError, make_llm
 from .pipeline import Engine, Options
 from .report_pdf import build_report_pdf
@@ -37,6 +38,22 @@ from .store import Store
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper(),
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("priorly.api")
+
+_make_record = logging.getLogRecordFactory()
+
+
+def _redacting_record(*a, **kw):
+    """Every log line passes through redact(), so an API key can never reach the log file."""
+    rec = _make_record(*a, **kw)
+    try:
+        rec.msg = redact(rec.getMessage())
+        rec.args = ()
+    except Exception:
+        pass
+    return rec
+
+
+logging.setLogRecordFactory(_redacting_record)
 
 # Settings that can change while the service runs vs. settings that need a restart.
 RUNTIME_SETTINGS = ("rrf_k", "candidates", "rerank_depth")
@@ -233,7 +250,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if n > st.settings.claim_max_chars:
             raise ApiError(400, "claim_too_long",
                            f"That claim is too long. Keep it under {st.settings.claim_max_chars:,} characters.")
+        body.claim = screen(st, body.claim, "search")
         return st
+
+    def screen(st: State, claim: str, source: str) -> str:
+        """Input guardrail. Blocks injection attempts (HTTP 422), cleans hidden characters and links, logs every non-clean verdict."""
+        verdict = inspect_claim(claim)
+        if verdict.action != "allow":
+            st.store.log_guardrail("input", verdict.action, [r["rule"] for r in verdict.reasons], redact(verdict.cleaned), source)
+        if verdict.blocked:
+            raise ApiError(422, "guardrail_blocked",
+                           "This text looks like an instruction to the AI rather than a patent claim, so it was not processed. "
+                           "Enter the claim you want to search.")
+        return verdict.cleaned
 
     def record(st: State, payload: dict) -> None:
         st.metrics.record(payload)
@@ -442,6 +471,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             meta = {"id": q["id"], "type": q["type"], "patent_id": q["patent_id"], "relevant": sorted(relevant)}
         if len(claim) < st.settings.claim_min_chars or len(claim) > st.settings.claim_max_chars:
             raise ApiError(400, "claim_length", "Provide a claim between the minimum and maximum length.")
+        if not body.query_id:
+            claim = screen(st, claim, "playground")
         runs = []
         for cfg in body.configs:
             t0 = time.perf_counter()
@@ -475,6 +506,46 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         headers={"Content-Disposition": 'attachment; filename="priorly-research-report.pdf"'})
 
     # ------------------------------------------------------------------- health
+    # ------------------------------------------------------------ guardrails and token usage
+    @app.post("/api/guardrails/check")
+    def guardrails_check(body: dict, request: Request):
+        """Run the input guardrail on any text without starting a search. Used by the Safety page tester."""
+        st = state(request)
+        text = str(body.get("text", ""))[:20000]
+        verdict = inspect_claim(text)
+        st.store.log_guardrail("input", verdict.action, [r["rule"] for r in verdict.reasons], redact(verdict.cleaned), "tester")
+        return verdict.to_dict()
+
+    @app.get("/api/guardrails/events")
+    def guardrails_events(request: Request, limit: int = Query(default=30, ge=1, le=200)):
+        return state(request).store.guardrail_summary(limit)
+
+    @app.get("/api/guardrails/selftest")
+    def guardrails_selftest(request: Request):
+        """Measured, not claimed: the red-team list must be caught and the real benchmark claims must pass."""
+        st = state(request)
+        attacks = [{"name": n, "text": t, "action": inspect_claim(t).action} for n, t in REDTEAM]
+        raw = read_json(st.settings.queries_path) if st.settings.queries_path else None
+        real = [q["claim"] for q in (raw or {}).get("queries", [])][:200] or [p.text[:600] for p in list(st.engine.corpus.patents.values())[:200]]
+        legit = [t for t in BENIGN + real]
+        wrong = [t[:80] for t in legit if inspect_claim(t).action != "allow"]
+        caught = sum(a["action"] != "allow" for a in attacks)
+        return {"attacks": [{"name": a["name"], "text": a["text"], "action": a["action"]} for a in attacks], "attacks_total": len(attacks),
+                "attacks_caught": caught, "detection_rate": round(caught / len(attacks), 4),
+                "legit_total": len(legit), "false_positives": len(wrong), "false_positive_examples": wrong[:5],
+                "legit_source": "benchmark claims" if raw else "corpus passages"}
+
+    @app.get("/api/usage")
+    def usage(request: Request):
+        st = state(request)
+        limit = st.settings.daily_token_limit
+        used = st.store.tokens_since(86400)
+        out = st.store.usage_summary()
+        out.update({"backend": st.settings.llm_backend, "model": st.settings.groq_model if st.settings.llm_backend == "groq" else None,
+                    "used_24h": used, "limit_24h": limit, "remaining_24h": max(0, limit - used) if limit else None,
+                    "tokens_total": st.store.tokens_total()})
+        return out
+
     @app.get("/api/health")
     def health(request: Request):
         st = state(request)

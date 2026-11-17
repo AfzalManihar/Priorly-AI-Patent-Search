@@ -56,5 +56,5 @@ def test_search_reports_the_work_it_did(client):
     claim = "A wireless charging system comprising a primary coil, a pickup coil and a controller that adjusts frequency."
     body = client.post("/api/search", json={"claim": claim, "k": 5}).json()
     work = body["work"]
-    assert set(work) == {"rerank_pairs_scored", "rerank_pairs_from_cache", "llm_calls", "llm_from_cache", "rerank_cache"}
+    assert set(work) == {"rerank_pairs_scored", "rerank_pairs_from_cache", "llm_calls", "llm_from_cache", "llm_tokens", "rerank_cache"}
     assert work["rerank_pairs_scored"] > 0 and all(isinstance(v, (int, bool)) and v >= 0 for v in work.values())

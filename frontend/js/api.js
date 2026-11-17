@@ -13,14 +13,7 @@
   }
 
   function accessHeaders(jsonBody) {
-    var token = window.sessionStorage.getItem("priorly_access_token");
-    if (token === null) {
-      token = window.prompt("Enter the Priorly demo access code:");
-      if (token === null) token = "";
-      window.sessionStorage.setItem("priorly_access_token", token.trim());
-      token = token.trim();
-    }
-    var headers = { "X-Priorly-Access-Token": token };
+    var headers = {};
     if (jsonBody) headers["Content-Type"] = "application/json";
     return headers;
   }

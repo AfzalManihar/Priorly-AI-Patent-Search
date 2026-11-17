@@ -7,6 +7,8 @@
 Stage A  every chunking strategy x {BM25, dense, hybrid}        15 combinations, no LLM
 Stage B  on the best stage-A chunking, hybrid + each technique   up to 10 combinations
 Stage C  hybrid + rerank on every other chunking                  4 combinations
+Stage D  RRF constant k = 10, 30, 100 on hybrid                    3 combinations
+Stage E  rerank depth 20 and 100 on hybrid + rerank               2 combinations
 
 Every number comes from running the engine. Nothing is typed in. Leakage controls match eval.run_eval:
 the query patent is excluded and only earlier patents may be returned. LLM temperature is 0 and every LLM
@@ -15,6 +17,7 @@ answer is cached by input hash, so a rerun repeats the same text.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import random
@@ -66,10 +69,13 @@ class Combo:
     transform: str = "none"
     rerank: bool = False
     stage: str = "A"
+    rrf_k: int = 0  # 0 = the configured default; otherwise the RRF constant for this combination (stage D)
+    depth: int = 0  # 0 = the configured default; otherwise how many fused candidates the cross-encoder scores (stage E)
 
     @property
     def id(self) -> str:
-        return f"{self.retrieval}|{self.chunking}|{self.transform}|{'rerank' if self.rerank else 'plain'}"
+        base = f"{self.retrieval}|{self.chunking}|{self.transform}|{'rerank' if self.rerank else 'plain'}"
+        return base + (f"|k{self.rrf_k}" if self.rrf_k else "") + (f"|d{self.depth}" if self.depth else "")
 
     @property
     def needs_llm(self) -> bool:
@@ -80,7 +86,9 @@ class Combo:
         if self.transform != "none":
             parts.append(TRANSFORMS[self.transform])
         if self.rerank:
-            parts.append("cross-encoder rerank")
+            parts.append("cross-encoder rerank" + (f" top-{self.depth}" if self.depth else ""))
+        if self.rrf_k:
+            parts.append(f"RRF k={self.rrf_k}")
         return " / ".join(parts)
 
 
@@ -101,6 +109,16 @@ def stage_b(best: str) -> list[Combo]:
         Combo(best, "dense", "hyde", False, "B"),
         Combo(best, "bm25", "prf", False, "B"),
     ]
+
+
+def stage_d(best: str) -> list[Combo]:
+    """RRF constant sensitivity: how much does the fusion setting matter? Same indexes, no LLM."""
+    return [Combo(best, "hybrid", "none", False, "D", rrf_k=k) for k in (10, 30, 100)]
+
+
+def stage_e(best: str) -> list[Combo]:
+    """Rerank depth: how many fused candidates must the cross-encoder score before the gain stops?"""
+    return [Combo(best, "hybrid", "none", True, "E", depth=d) for d in (20, 100)]
 
 
 def stage_c(best: str) -> list[Combo]:
@@ -158,7 +176,18 @@ def make_engine(settings: Settings, patents: list, chunking: str, llm, scorer, p
     return Engine(cfg, corpus, BM25Index(corpus), build_dense(cfg, corpus), scorer, llm)
 
 
+def variant(engine: Engine, combo: Combo) -> Engine:
+    """The same indexes with a different RRF constant or rerank depth. The copy shares every index and cache."""
+    if not (combo.rrf_k or combo.depth):
+        return engine
+    clone = copy.copy(engine)
+    clone.settings = replace(engine.settings, rrf_k=combo.rrf_k or engine.settings.rrf_k,
+                             rerank_depth=combo.depth or engine.settings.rerank_depth)
+    return clone
+
+
 def run_combo(engine: Engine, combo: Combo, queries: list[dict]) -> dict:
+    engine = variant(engine, combo)
     rows, stage_ms, work = [], Counter(), Counter()
     for q in queries:
         cons = Constraints(exclude_ids=frozenset([q["patent_id"]]), max_year=q["year"] - 1)
@@ -207,6 +236,7 @@ def summarise(combo: Combo, rows: list[dict], stage_ms: dict, work: dict) -> dic
     return {
         "id": combo.id, "stage": combo.stage, "label": combo.label(), "chunking": combo.chunking,
         "retrieval": combo.retrieval, "transform": combo.transform, "rerank": combo.rerank,
+        "rrf_k": combo.rrf_k or None, "rerank_depth": combo.depth or None,
         "metrics": metrics, "latency_ms": {"mean": round(mean(lat), 1), "p50": round(percentile(lat, 0.5), 1), "p95": round(percentile(lat, 0.95), 1)},
         "stage_ms_mean": stage_ms, "work": work, "by_type": by_type, "per_query": rows,
     }
@@ -289,6 +319,15 @@ def make_findings(done: dict[str, dict]) -> list[dict]:
             elif c["transform"] != "none" and not c["rerank"]:
                 add("query", f"Query processing: {TRANSFORMS[c['transform']]} added to hybrid", compare(done, cid, plain),
                     "Judged against the same hybrid retrieval without it.")
+        for cid, c in done.items():
+            if c["chunking"] != best_chunking or c["retrieval"] != "hybrid" or c["transform"] != "none":
+                continue
+            if c["stage"] == "D":
+                add("fusion", f"RRF constant k={c['rrf_k']} vs the default k", compare(done, cid, plain),
+                    "RRF is meant to be insensitive to k; a clear difference would mean the default needs tuning.")
+            elif c["stage"] == "E":
+                add("depth", f"Rerank depth {c['rerank_depth']} vs the default depth", compare(done, cid, f"hybrid|{best_chunking}|none|rerank"),
+                    "A deeper rerank costs more time; it is only worth it if recall rises.")
     return out
 
 
@@ -405,6 +444,8 @@ def main() -> None:
         print(f"best chunking for stage B and C: {best_chunking}")
         execute(stage_b(best_chunking))
         execute(stage_c(best_chunking))
+        execute(stage_d(best_chunking))
+        execute(stage_e(best_chunking))
     save(out, meta, done, skipped, True)
     best = pick_best(done)
     print(f"\n{len(done)} combinations measured -> {out}")

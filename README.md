@@ -718,3 +718,9 @@ See the `LICENSE` file in the repository for the applicable license.
 <p align="center">
   ⭐ If you find this project interesting, consider starring the repository!
 </p>
+## Guardrails and token usage
+
+- `app/guardrails.py` screens every claim (search, stream, playground) for prompt injection, prompt-extraction, role hijack, fake delimiters, secret requests and multilingual overrides. Blocked input returns HTTP 422 `guardrail_blocked`. Model output is cleaned and rejected if it leaks the canary marker or obeys an injected instruction.
+- The **Safety** page shows the policies, a live attack tester, a measured self-test (`/api/guardrails/selftest`) and recent events. Keys are redacted from logs.
+- Every Groq call records the `usage` Groq returns. `GET /api/usage`, the sidebar meter and Observability show 24 h use, a per-task split and cache savings. `DAILY_TOKEN_LIMIT` stops calls before the free quota is gone.
+- The comparison grid now has 30 combinations (34 with HyDE): stage D varies the RRF constant, stage E the rerank depth.

@@ -29,10 +29,11 @@
       <button data-view="playground"><span data-i="play"></span>Strategy playground</button>
       <button data-view="inspector"><span data-i="search"></span>Retrieval inspector</button>
       <button data-view="obs"><span data-i="trace"></span>Observability</button>
+      <button data-view="safety"><span data-i="settings"></span>Safety</button>
       <button data-view="settings"><span data-i="settings"></span>Pipeline settings</button>
     </nav>
     <div class="foot">
-      <div class="usage">Searches this month<div class="track"><i></i></div><div style="margin-top:6px">21 of 50 used</div></div>
+      <div class="usage" id="tokenMeter">LLM tokens<div class="track"><i style="width:0"></i></div><div style="margin-top:6px">Loading...</div></div>
       <button class="btn ghost sm" id="themeBtn" aria-label="Toggle dark mode" style="justify-content:flex-start"><span id="themeIcon"></span><span id="themeLabel">Dark mode</span></button>
     </div>
   </aside>
@@ -103,6 +104,7 @@
         <button class="btn sm" id="exportBtn"><span data-i="download"></span>Export table</button>
       </div>
       <div class="metrics" id="metrics"></div>
+      <div class="card" id="gridSummary"></div>
       <div class="card">
         <h3>Lift by pipeline stage</h3>
         <div id="chartHost"></div>
@@ -150,7 +152,7 @@
             <input class="inp" type="number" value="50" min="10" max="100" name="depth">
             <span class="hint">Fused candidates sent to the cross-encoder.</span></label>
           <label>LLM for decomposition and reasons
-            <select class="inp" name="llm"><option>Groq, llama-3.3-70b</option><option>OpenAI, gpt-4o-mini</option></select>
+            <select class="inp" name="llm"><option value="openai/gpt-oss-120b" selected>openai/gpt-oss-120b</option></select>
             <span class="hint">Writes elements, HyDE passages, and result reasons.</span></label>
           <p id="settingsNote" class="note" style="grid-column:1/-1;margin:0"></p>
           <div style="grid-column:1/-1;display:flex;gap:8px"><button class="btn primary" type="submit">Save settings</button><button class="btn" type="reset">Reset to defaults</button></div>
@@ -169,6 +171,7 @@
     <section class="view" id="v-playground"></section>
     <section class="view" id="v-inspector"></section>
     <section class="view" id="v-obs"></section>
+    <section class="view" id="v-safety"></section>
   </main>
 </div>
 

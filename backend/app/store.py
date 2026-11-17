@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,6 +16,13 @@ CREATE TABLE IF NOT EXISTS reports (
   shortlist TEXT NOT NULL, n INTEGER NOT NULL, best REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS llm_cache (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS guardrail_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, stage TEXT NOT NULL, action TEXT NOT NULL,
+  rules TEXT NOT NULL, excerpt TEXT NOT NULL, source TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS llm_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, task TEXT NOT NULL, model TEXT NOT NULL,
+  prompt_tokens INTEGER NOT NULL, completion_tokens INTEGER NOT NULL, total_tokens INTEGER NOT NULL,
+  cached INTEGER NOT NULL, ms INTEGER NOT NULL);
 """
 
 
@@ -115,6 +123,62 @@ class Store:
             self.db.execute("INSERT OR REPLACE INTO llm_cache VALUES (?,?)", (key, value))
             self.db.commit()
 
+    # guardrail events -------------------------------------------------------------
+    def log_guardrail(self, stage: str, action: str, rules: list[str], excerpt: str, source: str) -> None:
+        with self.lock:
+            self.db.execute("INSERT INTO guardrail_events (ts, stage, action, rules, excerpt, source) VALUES (?,?,?,?,?,?)",
+                            (time.time(), stage, action, json.dumps(rules), excerpt[:120], source))
+            self.db.commit()
+
+    def guardrail_summary(self, limit: int = 30) -> dict:
+        with self.lock:
+            rows = self.db.execute("SELECT * FROM guardrail_events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+            counts = self.db.execute("SELECT stage, action, COUNT(*) n FROM guardrail_events GROUP BY stage, action").fetchall()
+            by_rule: dict[str, int] = {}
+            for r in self.db.execute("SELECT rules FROM guardrail_events").fetchall():
+                for rule in json.loads(r["rules"]):
+                    by_rule[rule] = by_rule.get(rule, 0) + 1
+        return {"counts": {f"{c['stage']}_{c['action']}": c["n"] for c in counts}, "by_rule": by_rule,
+                "recent": [{"time": datetime.fromtimestamp(r["ts"], timezone.utc).isoformat(timespec="seconds"),
+                            "stage": r["stage"], "action": r["action"], "rules": json.loads(r["rules"]),
+                            "excerpt": r["excerpt"], "source": r["source"]} for r in rows]}
+
+    # LLM token usage --------------------------------------------------------------
+    def log_usage(self, task: str, model: str, prompt: int, completion: int, total: int, cached: bool, ms: int) -> None:
+        with self.lock:
+            self.db.execute("INSERT INTO llm_usage (ts, task, model, prompt_tokens, completion_tokens, total_tokens, cached, ms)"
+                            " VALUES (?,?,?,?,?,?,?,?)", (time.time(), task, model, prompt, completion, total, int(cached), ms))
+            self.db.commit()
+
+    def tokens_since(self, seconds: float) -> int:
+        with self.lock:
+            return self.db.execute("SELECT COALESCE(SUM(total_tokens),0) FROM llm_usage WHERE cached=0 AND ts>=?",
+                                   (time.time() - seconds,)).fetchone()[0]
+
+    def tokens_total(self) -> int:
+        with self.lock:
+            return self.db.execute("SELECT COALESCE(SUM(total_tokens),0) FROM llm_usage WHERE cached=0").fetchone()[0]
+
+    def usage_summary(self, recent: int = 15) -> dict:
+        day = time.time() - 86400
+        with self.lock:
+            by_task = self.db.execute(
+                "SELECT task, COUNT(*) calls, SUM(prompt_tokens) p, SUM(completion_tokens) c, SUM(total_tokens) t FROM llm_usage"
+                " WHERE cached=0 AND ts>=? GROUP BY task ORDER BY t DESC", (day,)).fetchall()
+            by_day = self.db.execute(
+                "SELECT date(ts,'unixepoch') d, SUM(total_tokens) t, COUNT(*) calls FROM llm_usage WHERE cached=0 AND ts>=?"
+                " GROUP BY d ORDER BY d", (time.time() - 7 * 86400,)).fetchall()
+            saved = self.db.execute("SELECT COUNT(*) n, COALESCE(SUM(total_tokens),0) t FROM llm_usage WHERE cached=1").fetchone()
+            rows = self.db.execute("SELECT * FROM llm_usage ORDER BY id DESC LIMIT ?", (recent,)).fetchall()
+            allc = self.db.execute("SELECT COUNT(*) FROM llm_usage WHERE cached=0").fetchone()[0]
+        return {
+            "by_task": [{"task": r["task"], "calls": r["calls"], "prompt": r["p"], "completion": r["c"], "total": r["t"]} for r in by_task],
+            "by_day": [{"day": r["d"], "tokens": r["t"], "calls": r["calls"]} for r in by_day],
+            "cache_hits": saved["n"], "tokens_saved_estimate": saved["t"], "calls_total": allc,
+            "recent": [{"time": datetime.fromtimestamp(r["ts"], timezone.utc).isoformat(timespec="seconds"), "task": r["task"],
+                        "model": r["model"], "prompt": r["prompt_tokens"], "completion": r["completion_tokens"],
+                        "total": r["total_tokens"], "cached": bool(r["cached"]), "ms": r["ms"]} for r in rows]}
+
     # deletion and statistics (PRD NFR-08, NFR-09) -----------------------------------
     def delete_search(self, search_id: str) -> dict | None:
         """Remove one stored search and every report built from it. None if it does not exist."""
@@ -132,7 +196,7 @@ class Store:
         with self.lock:
             counts = {name: self.db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
                       for name, table in (("searches", "searches"), ("reports", "reports"), ("llm_cache", "llm_cache"))}
-            for table in ("searches", "reports", "llm_cache"):
+            for table in ("searches", "reports", "llm_cache", "guardrail_events"):
                 self.db.execute(f"DELETE FROM {table}")
             self.db.commit()
         return counts

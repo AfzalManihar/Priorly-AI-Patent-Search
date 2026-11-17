@@ -378,8 +378,8 @@
 
   function drawObs() {
     var body = $("#obsBody");
-    Promise.all([API.get("/api/metrics"), API.get("/api/traces?limit=25")]).then(function (r) {
-      var m = r[0], tr = r[1].traces, cache = m.llm_cache || {}, lat = m.latency_ms || {};
+    Promise.all([API.get("/api/metrics"), API.get("/api/traces?limit=25"), API.get("/api/usage")]).then(function (r) {
+      var m = r[0], tr = r[1].traces, usage = r[2], cache = m.llm_cache || {}, lat = m.latency_ms || {};
       var stages = m.stage_p95_ms || {}, maxStage = Math.max.apply(null, Object.keys(stages).map(function (k) { return stages[k] || 0; }).concat([1]));
       body.innerHTML = '<div class="stat-grid">' +
         [["Searches", m.searches], ["Degraded", m.degraded_searches], ["p50 latency", ms(lat.p50)], ["p95 latency", ms(lat.p95)],
@@ -388,29 +388,167 @@
         '<div class="card"><h3>Stage p95 latency</h3>' + (Object.keys(stages).length ? Object.keys(stages).map(function (k) {
           return '<div class="hbar"><span>' + esc(k) + '</span><div class="track"><i style="width:' + (100 * (stages[k] || 0) / maxStage) + '%"></i></div><span>' + ms(stages[k]) + "</span></div>";
         }).join("") : '<p class="note">No searches recorded yet.</p>') + "</div>" +
+        usageCard(usage) +
         '<div class="card"><h3>Errors by status</h3><div class="kvs">' + (Object.keys(m.errors_by_status || {}).length ? Object.keys(m.errors_by_status).map(function (k) { return chip(k + ": " + m.errors_by_status[k]); }).join("") : chip("none")) + "</div></div>" +
-        '<div class="card"><h3>Recent traces</h3>' + legend() + '<div class="scroll-x"><table class="tbl" style="margin-top:10px"><thead><tr><th>Time</th><th>Claim</th><th>Strategy</th><th>Stages</th><th class="num">Total</th><th class="num">Rerank pairs</th><th class="num">LLM calls</th></tr></thead><tbody>' +
+        '<div class="card"><h3>Recent traces</h3>' + legend() + '<div class="scroll-x"><table class="tbl" style="margin-top:10px"><thead><tr><th>Time</th><th>Claim</th><th>Strategy</th><th>Stages</th><th class="num">Total</th><th class="num">Rerank pairs</th><th class="num">LLM calls</th><th class="num">Tokens</th></tr></thead><tbody>' +
         tr.map(function (t) {
           var w = t.work || {};
           return '<tr class="click" data-id="' + esc(t.search_id) + '"><td>' + esc(t.created.slice(11, 19)) + "</td><td>" + esc(t.claim.slice(0, 60)) + "</td><td>" + esc(optionText(t.options)) + "</td><td style=\"min-width:140px\">" + stackBar(t.timings_ms) +
-            '</td><td class="num">' + ms(t.timings_ms.total) + '</td><td class="num">' + (w.rerank_pairs_scored || 0) + '</td><td class="num">' + (w.llm_calls || 0) + "</td></tr>";
+            '</td><td class="num">' + ms(t.timings_ms.total) + '</td><td class="num">' + (w.rerank_pairs_scored || 0) + '</td><td class="num">' + (w.llm_calls || 0) + '</td><td class="num">' + (w.llm_tokens == null ? "-" : fmtN(w.llm_tokens)) + "</td></tr>";
         }).join("") + '</tbody></table></div><p class="note">Click a row to open it in the inspector.</p></div>';
+      refreshMeter();
       $$("#obsBody tr.click").forEach(function (row) { row.onclick = function () { inspectId = row.dataset.id; window.__show("inspector"); }; });
     }, function (e) { err(body, e); });
   }
 
+  /* ------------------------------------------------------------ token usage */
+  function fmtN(n) { return n == null ? "-" : Number(n).toLocaleString("en-US"); }
+
+  function refreshMeter() {
+    var host = $("#tokenMeter");
+    if (!host) return;
+    API.get("/api/usage").then(function (u) {
+      if (u.backend !== "groq") {
+        host.innerHTML = "LLM tokens<div style=\"margin-top:6px\">Offline mode, no tokens used</div>";
+        return;
+      }
+      var pct = u.limit_24h ? Math.min(100, 100 * u.used_24h / u.limit_24h) : 0;
+      host.innerHTML = "LLM tokens, last 24 h" + '<div class="track"><i style="width:' + pct.toFixed(1) + '%"></i></div>' +
+        '<div style="margin-top:6px">' + fmtN(u.used_24h) + (u.limit_24h ? " of " + fmtN(u.limit_24h) : "") + " used</div>";
+    }, function () { host.innerHTML = "LLM tokens<div style=\"margin-top:6px\">Unavailable</div>"; });
+  }
+
+  function usageCard(u) {
+    if (u.backend !== "groq") {
+      return '<div class="card"><h3>LLM token usage</h3><p class="note" style="margin-top:0">The LLM backend is the offline heuristic, so no tokens are used. Set LLM_BACKEND=groq to track Groq usage.</p></div>';
+    }
+    var tasks = u.by_task, max = Math.max.apply(null, tasks.map(function (t) { return t.total; }).concat([1]));
+    var days = u.by_day, dmax = Math.max.apply(null, days.map(function (d) { return d.tokens; }).concat([1]));
+    return '<div class="card"><h3>LLM token usage (' + esc(u.model) + ")</h3>" +
+      '<div class="stat-grid">' + [["Used, last 24 h", fmtN(u.used_24h)], ["Daily limit", u.limit_24h ? fmtN(u.limit_24h) : "none"],
+        ["Remaining", u.remaining_24h == null ? "-" : fmtN(u.remaining_24h)], ["Groq calls, all time", fmtN(u.calls_total)],
+        ["Answers from cache", fmtN(u.cache_hits)], ["Tokens saved (estimate)", "~" + fmtN(u.tokens_saved_estimate)]].map(function (x) {
+        return '<div class="stat"><b>' + esc(x[1]) + "</b><small>" + esc(x[0]) + "</small></div>";
+      }).join("") + "</div>" +
+      '<h3 style="margin-top:18px">By task, last 24 h</h3>' + (tasks.length ? tasks.map(function (t) {
+        return '<div class="hbar"><span>' + esc(t.task) + '</span><div class="track"><i style="width:' + (100 * t.total / max) + '%"></i></div><span>' +
+          fmtN(t.total) + " tok, " + t.calls + " calls</span></div>";
+      }).join("") : '<p class="note">No Groq calls in the last 24 hours.</p>') +
+      '<h3 style="margin-top:18px">Last 7 days</h3>' + (days.length ? days.map(function (d) {
+        return '<div class="hbar"><span>' + esc(d.day.slice(5)) + '</span><div class="track"><i style="width:' + (100 * d.tokens / dmax) + '%"></i></div><span>' + fmtN(d.tokens) + "</span></div>";
+      }).join("") : '<p class="note">Nothing yet.</p>') +
+      '<h3 style="margin-top:18px">Recent calls</h3><div class="scroll-x"><table class="tbl"><thead><tr><th>Time</th><th>Task</th><th class="num">Prompt</th><th class="num">Completion</th><th class="num">Total</th><th>Source</th></tr></thead><tbody>' +
+      u.recent.map(function (r) {
+        return "<tr><td>" + esc(r.time.slice(11, 19)) + "</td><td>" + esc(r.task) + '</td><td class="num">' + (r.cached ? "-" : fmtN(r.prompt)) + '</td><td class="num">' +
+          (r.cached ? "-" : fmtN(r.completion)) + '</td><td class="num">' + (r.cached ? "~" : "") + fmtN(r.total) + "</td><td>" + (r.cached ? "cache (estimate, no tokens spent)" : "Groq, " + ms(r.ms)) + "</td></tr>";
+      }).join("") + '</tbody></table></div><p class="note">Token counts come from the usage field Groq returns with every answer. Cached answers cost nothing; their size is an estimate (4 characters per token).</p></div>';
+  }
+
+  /* ------------------------------------------------------------ safety */
+  var POLICIES = [
+    ["Input guard", "Every claim is Unicode-normalised, stripped of hidden characters, then checked for instruction overrides, role hijacks, prompt-extraction requests, fake system or chat delimiters, secret requests and attacks in Hindi, Hinglish, Spanish, French, German and Chinese. Matches are refused with HTTP 422."],
+    ["Prompt isolation", "The claim, claim elements and patent passages are sent to the model inside data tags, and the system prompt tells the model that anything inside them is data and never an instruction."],
+    ["Prompt-leak guard", "A random marker lives only in the system prompts. If a model answer contains it, repeats the prompt wording or shows that it obeyed an injected instruction, the answer is dropped, never cached, and the pipeline uses its fallback."],
+    ["Output guard", "Model text is stripped of HTML and links, length-capped, and decomposed elements must share words with the claim, so a hijacked answer cannot reach the results page."],
+    ["Secret hygiene", "API keys and bearer tokens are redacted from logs and error messages. Stored attack excerpts are redacted and capped at 120 characters."],
+    ["Spend guard", "A rolling 24-hour token limit (DAILY_TOKEN_LIMIT) stops Groq calls before the free quota runs out. Searches continue with the offline fallbacks."]
+  ];
+
+  function verdictChip(a) { return chip(a, a === "block" ? "flag" : (a === "flag" ? "e2" : "e1")); }
+
+  function renderSafety() {
+    var host = $("#v-safety");
+    if (!$("#safeBody")) {
+      host.innerHTML = head("Safety guardrails", "Prompt-injection, prompt-leak and secret-exfiltration protection around every LLM call. Everything on this page is measured on this server.",
+        '<button class="btn" id="safeRefresh">Refresh</button>') +
+        '<div class="card"><h3>What is protected</h3><div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">' +
+        POLICIES.map(function (p) { return '<div class="stat"><b style="font-size:14px">' + esc(p[0]) + '</b><small style="display:block;margin-top:6px;line-height:1.5">' + esc(p[1]) + "</small></div>"; }).join("") + "</div></div>" +
+        '<div class="card"><h3>Try an attack</h3><p class="note" style="margin-top:0">Nothing here starts a search or calls Groq. The text is only run through the input guard.</p>' +
+        '<div class="kvs" id="safePresets"></div><textarea id="safeText" rows="4" style="width:100%;margin-top:12px" placeholder="Paste a claim or an attack"></textarea>' +
+        '<div style="margin-top:10px"><button class="btn primary" id="safeRun">Check text</button></div><div id="safeVerdict" style="margin-top:12px"></div></div>' +
+        '<div class="card"><h3>Self-test</h3><p class="note" style="margin-top:0">Runs the built-in red-team list and the real benchmark claims through the guard.</p>' +
+        '<button class="btn" id="safeTest">Run self-test</button><div id="safeTestOut" style="margin-top:12px"></div></div>' +
+        '<div id="safeBody"></div>';
+      $("#safeRefresh").onclick = drawSafety;
+      $("#safeRun").onclick = function () {
+        var t = $("#safeText").value;
+        if (!t.trim()) return;
+        API.post("/api/guardrails/check", { text: t }).then(function (v) {
+          $("#safeVerdict").innerHTML = verdictChip(v.action) + " " + (v.reasons.length ? v.reasons.map(function (r) { return chip(r.rule + " (" + r.category.replace("_", " ") + ")"); }).join(" ") : chip("no attack pattern found")) +
+            (v.action === "flag" ? '<p class="note">The text continues with this cleaned version:</p><pre class="note" style="white-space:pre-wrap">' + esc(v.cleaned) + "</pre>" : "") +
+            (v.action === "block" ? '<p class="note">A search with this text is refused with HTTP 422 and never reaches the models.</p>' : "");
+          drawSafety();
+        }, function (e) { err($("#safeVerdict"), e); });
+      };
+      $("#safeTest").onclick = function () {
+        var out = $("#safeTestOut"); out.textContent = "Running...";
+        API.get("/api/guardrails/selftest").then(function (r) {
+          out.innerHTML = '<div class="stat-grid">' + [["Attacks caught", r.attacks_caught + " of " + r.attacks_total], ["Detection rate", (100 * r.detection_rate).toFixed(1) + "%"],
+            ["Legitimate texts checked", fmtN(r.legit_total) + " (" + r.legit_source + ")"], ["False positives", r.false_positives]].map(function (x) {
+            return '<div class="stat"><b>' + esc(x[1]) + "</b><small>" + esc(x[0]) + "</small></div>"; }).join("") + "</div>" +
+            '<div class="kvs">' + r.attacks.map(function (a) { return chip(a.name + ": " + a.action, a.action === "block" ? "flag" : (a.action === "flag" ? "e2" : "")); }).join("") + "</div>" +
+            (r.false_positive_examples.length ? '<p class="note">Wrongly stopped: ' + esc(r.false_positive_examples.join(" | ")) + "</p>" : "") +
+            '<p class="note">The red-team list is small and written by us, so this measures regressions, not protection against a determined attacker. Model-side guards (isolation, canary, output checks) cover what pattern matching cannot.</p>';
+          $$("#safePresets button").length || null;
+          if (!$("#safePresets button")) $("#safePresets").innerHTML = r.attacks.slice(0, 8).map(function (a, i) { return '<button class="btn" data-i="' + i + '">' + esc(a.name) + "</button>"; }).join("");
+          $$("#safePresets button").forEach(function (b) { b.onclick = function () { $("#safeText").value = r.attacks[+b.dataset.i].text; }; });
+        }, function (e) { err(out, e); });
+      };
+      API.get("/api/guardrails/selftest").then(function (r) {
+        $("#safePresets").innerHTML = r.attacks.slice(0, 8).map(function (a, i) { return '<button class="btn" data-i="' + i + '">' + esc(a.name) + "</button>"; }).join("");
+        $$("#safePresets button").forEach(function (b) { b.onclick = function () { $("#safeText").value = r.attacks[+b.dataset.i].text; }; });
+      }, function () {});
+    }
+    drawSafety();
+  }
+
+  function drawSafety() {
+    var body = $("#safeBody");
+    API.get("/api/guardrails/events?limit=25").then(function (e) {
+      var c = e.counts || {}, rules = Object.keys(e.by_rule || {});
+      body.innerHTML = '<div class="card"><h3>Counters since the database was created</h3><div class="stat-grid">' +
+        [["Inputs blocked", c.input_block || 0], ["Inputs cleaned", c.input_flag || 0], ["Model answers rejected", c.output_block || 0]].map(function (x) {
+          return '<div class="stat"><b>' + esc(x[1]) + "</b><small>" + esc(x[0]) + "</small></div>"; }).join("") + "</div>" +
+        '<div class="kvs">' + (rules.length ? rules.map(function (k) { return chip(k + ": " + e.by_rule[k]); }).join("") : chip("no events yet")) + "</div></div>" +
+        '<div class="card"><h3>Recent events</h3>' + (e.recent.length ? '<div class="scroll-x"><table class="tbl"><thead><tr><th>Time</th><th>Where</th><th>Action</th><th>Rules</th><th>Excerpt</th><th>Source</th></tr></thead><tbody>' +
+          e.recent.map(function (r) {
+            return "<tr><td>" + esc(r.time.slice(11, 19)) + "</td><td>" + esc(r.stage) + "</td><td>" + verdictChip(r.action) + "</td><td>" + esc(r.rules.join(", ")) + "</td><td>" + esc(r.excerpt) + "</td><td>" + esc(r.source) + "</td></tr>";
+          }).join("") + "</tbody></table></div>" : '<p class="note" style="margin-top:0">Nothing blocked or cleaned yet.</p>') + "</div>";
+    }, function (er) { err(body, er); });
+  }
+
   /* ------------------------------------------------------------ wiring */
+  function gridSummary() {
+    var host = $("#gridSummary");
+    if (!host) return;
+    API.get("/api/experiments").then(function (d) {
+      if (!d.combos) { host.innerHTML = "<h3>Comparison grid</h3><p class=\"note\" style=\"margin-top:0\">" + esc(d.message || "No comparison run yet.") + "</p>"; return; }
+      var m = d.meta, by = {}, best = d.combos.slice().sort(function (a, b) { return b.metrics["ndcg@10"].mean - a.metrics["ndcg@10"].mean; })[0];
+      d.combos.forEach(function (c) { by[c.stage] = (by[c.stage] || 0) + 1; });
+      var names = { A: "chunking x retrieval", B: "query processing and rerank", C: "rerank on other chunkings", D: "RRF constant", E: "rerank depth" };
+      host.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><h3 style="margin:0">Comparison grid: ' + d.combos.length +
+        " pipeline combinations on " + m.queries + " real queries</h3>" + '<button class="btn primary" id="gridOpen">Open all comparisons</button></div>' +
+        '<div class="kvs">' + Object.keys(by).sort().map(function (k) { return chip(by[k] + " x " + (names[k] || "stage " + k)); }).join("") +
+        chip("best nDCG@10 " + f3(best.metrics["ndcg@10"].mean) + ": " + best.label) + "</div>" +
+        '<p class="note">Every combination was run on the same queries and scored against examiner citations. Open Experiments for the heatmap, confidence intervals, per-query results and the PDF report.</p>';
+      $("#gridOpen").onclick = function () { window.__show("lab"); };
+    }, function () { host.style.display = "none"; });
+  }
+
   function onShow(view) {
+    if (view === "eval") gridSummary();
     if (timer) { clearInterval(timer); timer = null; }
     if (view === "lab") renderLab();
     if (view === "playground") loadDefaults().then(renderPlayground);
     if (view === "inspector") renderInspector();
     if (view === "obs") { renderObs(); timer = setInterval(drawObs, 10000); }
+    if (view === "safety") renderSafety();
   }
 
-  window.Lab = { onShow: onShow, applyDefault: loadDefaults };
+  window.Lab = { onShow: onShow, applyDefault: loadDefaults, refreshMeter: refreshMeter };
   window.__show = function (v) { var b = $('.menu button[data-view="' + v + '"]'); if (b) b.click(); };
 
   /* The validated default is applied to the search toggles on every page load. */
   loadDefaults();
+  refreshMeter();
 })();

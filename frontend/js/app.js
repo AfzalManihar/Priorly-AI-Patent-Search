@@ -611,6 +611,8 @@
         }
         if (m.retrieval.llm_backend === "groq") {
           rows.push(["Groq calls", String(w.llm_calls) + (w.llm_from_cache ? " (+" + w.llm_from_cache + " from cache)" : "")]);
+          if (w.llm_tokens != null) rows.push(["LLM tokens used", w.llm_tokens.toLocaleString("en-US")]);
+          if (window.Lab && Lab.refreshMeter) Lab.refreshMeter();
         }
       }
     } else {
