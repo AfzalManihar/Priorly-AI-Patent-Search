@@ -694,6 +694,96 @@ This status is not a claim of complete production readiness. Outstanding integra
 
 Priorly supports research and discovery. It does not replace a registered patent professional or a legal assessment.
 
+## 🛡️ Application Safety, Guardrails & Usage Controls
+
+Priorly includes application-level safeguards designed to reduce prompt-injection risks, protect sensitive information, and provide visibility into LLM resource consumption.
+
+### 1. Prompt-Injection Protection
+
+The Guardrails module (`backend/app/guardrails.py`) screens incoming claim text before it reaches the retrieval and LLM processing pipeline.
+
+It checks for potentially unsafe instructions and manipulation attempts, including:
+
+- Prompt injection and instruction overrides.
+- System prompt extraction attempts.
+- Role hijacking and impersonation.
+- Fake instruction delimiters.
+- Requests to reveal secrets or sensitive information.
+- Multilingual instruction overrides.
+- Hidden and unusual Unicode characters.
+
+Requests identified as blocked are rejected with HTTP `422` and the `guardrail_blocked` error code.
+
+### 2. Model Output Protection
+
+Guardrails also inspect generated model responses before they are returned by the application.
+
+Output checks include:
+
+- Detection of internal canary-marker leakage.
+- Rejection of responses that violate configured output safeguards.
+- Sensitive-value redaction in application logs.
+- Protection against treating untrusted patent content as trusted instructions.
+
+These controls provide an additional application-level safety layer; they do not guarantee that every possible attack or model error will be detected.
+
+### 3. Safety Dashboard
+
+The application provides a dedicated **Safety** interface for inspecting and testing guardrail behaviour.
+
+| Capability | Description |
+|---|---|
+| Guardrail Policies | View the configured input and output safeguards. |
+| Attack Tester | Submit sample text and inspect the guardrail decision. |
+| Self-Test | Run the configured guardrail test suite through `/api/guardrails/selftest`. |
+| Event History | Inspect recent guardrail events through `/api/guardrails/events`. |
+| Input Validation | Check text using `/api/guardrails/check`. |
+| Log Redaction | Redact supported sensitive values from application logs. |
+
+The self-test reports measured results from its configured test cases; it should not be interpreted as proof of complete security.
+
+### 4. LLM Token Accounting
+
+Priorly records token usage returned by the Groq API for successful model responses.
+
+The usage information is available through:
+
+- `GET /api/usage`
+- The application sidebar usage meter.
+- The Observability dashboard.
+
+Available information includes:
+
+| Measurement | Purpose |
+|---|---|
+| 24-Hour Token Usage | Tracks recorded token consumption over the last 24 hours. |
+| Task-Level Usage | Breaks down usage by LLM task. |
+| Cache Savings | Shows usage-related cache savings information. |
+| Usage History | Provides recorded LLM usage information. |
+
+### 5. Daily Token Limit
+
+Priorly supports a configurable daily token limit through:
+
+```dotenv
+DAILY_TOKEN_LIMIT=200000
+```
+
+The application checks recorded token consumption before making a new LLM request. Requests are stopped when the configured limit has already been reached.
+
+**Important:** This is a pre-request usage check, not a strict provider-side quota reservation. A request already in progress can cause actual consumption to exceed the configured limit.
+
+### 6. Configuration and Privacy
+
+- Provider credentials should be stored in environment variables.
+- API keys must never be committed to the repository.
+- Sensitive values should not be exposed through application logs or API responses.
+- Usage records and guardrail events are stored using the application's configured SQLite persistence.
+
+These safeguards complement, but do not replace, production security measures such as HTTPS, secure secret management, access controls, and infrastructure monitoring.
+
+
+
 ## 👨‍💻 Author
 
 **Afzal Manihar**
@@ -711,16 +801,3 @@ See the `LICENSE` file in the repository for the applicable license.
 
 ---
 
-<p align="center">
-  <strong>Priorly — Making Patent Prior-Art Discovery More Intelligent, Explainable, and Measurable.</strong>
-</p>
-
-<p align="center">
-  ⭐ If you find this project interesting, consider starring the repository!
-</p>
-## Guardrails and token usage
-
-- `app/guardrails.py` screens every claim (search, stream, playground) for prompt injection, prompt-extraction, role hijack, fake delimiters, secret requests and multilingual overrides. Blocked input returns HTTP 422 `guardrail_blocked`. Model output is cleaned and rejected if it leaks the canary marker or obeys an injected instruction.
-- The **Safety** page shows the policies, a live attack tester, a measured self-test (`/api/guardrails/selftest`) and recent events. Keys are redacted from logs.
-- Every Groq call records the `usage` Groq returns. `GET /api/usage`, the sidebar meter and Observability show 24 h use, a per-task split and cache savings. `DAILY_TOKEN_LIMIT` stops calls before the free quota is gone.
-- The comparison grid now has 30 combinations (34 with HyDE): stage D varies the RRF constant, stage E the rerank depth.
