@@ -45,6 +45,7 @@ mark[data-e="3"]{background:var(--e3);color:var(--e3-ink)}
 .chip.flag{background:var(--brand-soft);color:var(--brand);border-color:transparent}
 .logo{display:inline-flex;align-items:center;gap:10px;font-weight:600;font-size:18px;letter-spacing:-.01em}
 .logo svg{width:26px;height:26px}
+.logo img{width:26px;height:26px;object-fit:contain;display:block}
 
 /* ---------- Landing ---------- */
 .wrap{max-width:1160px;margin:0 auto;padding:0 24px}
