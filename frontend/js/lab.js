@@ -57,7 +57,7 @@
         if (chipHost) chipHost.innerHTML = "No validated default yet. Run the comparison (python -m eval.grid) to choose one from measured results.";
         return d;
       }
-      applyOptions(Object.assign({}, d.pipeline_options, { prf: true }));
+      // Keep search toggles at their HTML defaults; apply benchmark options only on user reset.
       if (chipHost) {
         chipHost.innerHTML = '<span class="chip flag">Validated default</span><span>' + esc(optionText(d.pipeline_options)) +
           " &middot; nDCG@10 " + f3(d.config.metrics["ndcg@10"].mean) + ", Recall@10 " + f3(d.config.metrics["recall@10"].mean) +

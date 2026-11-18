@@ -45,9 +45,15 @@ _make_record = logging.getLogRecordFactory()
 def _redacting_record(*a, **kw):
     """Every log line passes through redact(), so an API key can never reach the log file."""
     rec = _make_record(*a, **kw)
+    # The message template and every string argument are cleaned in place. record.args keeps its shape, because
+    # formatters such as uvicorn's AccessFormatter unpack exactly five values from it.
     try:
-        rec.msg = redact(rec.getMessage())
-        rec.args = ()
+        if isinstance(rec.msg, str):
+            rec.msg = redact(rec.msg)
+        if isinstance(rec.args, tuple):
+            rec.args = tuple(redact(x) if isinstance(x, str) else x for x in rec.args)
+        elif isinstance(rec.args, dict):
+            rec.args = {k: redact(v) if isinstance(v, str) else v for k, v in rec.args.items()}
     except Exception:
         pass
     return rec
@@ -563,6 +569,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "chunking": st.settings.chunking,
             "budgets_s": {"stage": st.settings.stage_budget_s, "rerank": st.settings.rerank_budget_s,
                           "explain": st.settings.explain_budget_s, "coverage_scope": st.settings.coverage_scope},
+            "rerank": {"depth": st.settings.rerank_depth, "chunks_per_patent": st.settings.rerank_chunks,
+                       "batch": st.settings.rerank_batch, "element_pairs": st.settings.rerank_elements},
         }
 
     @app.get("/api/metrics")

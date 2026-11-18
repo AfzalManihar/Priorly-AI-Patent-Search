@@ -126,8 +126,8 @@ def test_coverage_matches_displayed_evidence():
         ),
     )
 
-    covered, display_idx = Engine._coverage(fake, ["E1", "E2"], "P1")
+    covered, display_idx, partial = Engine._coverage(fake, ["E1", "E2"], "P1")
 
     assert display_idx == 0
-    assert covered == [1]
+    assert covered == [1] and partial == []
 

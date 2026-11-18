@@ -207,6 +207,7 @@
         year: r.year,
         cpc: r.cpc,
         el: r.el,
+        elp: r.el_partial || [],
         dense: r.dense,
         bm25: r.bm25,
         rrfRank: r.rrf_rank,
@@ -489,7 +490,8 @@
     return Array.apply(null, Array(n)).map(function (_, i) {
       var num = i + 1;
       return '<span class="chip' +
-        (p.el.indexOf(num) > -1 ? " e" + ((num - 1) % 3 + 1) : "") +
+        (p.el.indexOf(num) > -1 ? " e" + ((num - 1) % 3 + 1) : (p.elp && p.elp.indexOf(num) > -1 ? " partial" : "")) +
+        '" title="' + (p.el.indexOf(num) > -1 ? "Supported" : (p.elp && p.elp.indexOf(num) > -1 ? "Partly supported" : "Not found in the shown passage")) +
         '">E' + num + "</span>";
     }).join("");
   }
@@ -578,15 +580,19 @@
       var c = res.shown.filter(function (p) {
         return p.el.indexOf(e.n) > -1;
       }).length;
+      var h = res.shown.filter(function (p) {
+        return p.elp && p.elp.indexOf(e.n) > -1;
+      }).length;
 
       return '<div class="cov"><span class="chip e' +
         ((e.n - 1) % 3 + 1) +
         '">E' + e.n +
         '</span><div class="track"><i style="width:' +
         Math.round(c / Math.max(n, 1) * 100) +
-        '%"></i></div><span>' + c + "/" + n + "</span></div>";
+        '%"></i><i class="half" style="width:' + Math.round(h / Math.max(n, 1) * 100) + '%"></i></div><span>' + c + "/" + n +
+        (h ? " +" + h + " partial" : "") + "</span></div>";
     }).join("") +
-      '<p style="font-size:12.5px;color:var(--ink3);margin-top:8px">Model-scored relevance matches, not verified patent disclosure. </p>';
+      '<p style="font-size:12.5px;color:var(--ink3);margin-top:8px">Supported means the passage contains the key terms of the element and the reranker agrees. Partial means one of the two is weaker. Neither is a legal reading of the claim.</p>';
   }
 
   function renderRunInfo(res, o, secs) {

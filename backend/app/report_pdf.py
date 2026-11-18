@@ -111,7 +111,7 @@ def build_report_pdf(report: dict, search: dict) -> bytes:
     for note in backend_notes(response):
         story.append(Paragraph(_text(note), small))
     if response.get("degraded"):
-        story.append(Paragraph(_text("Degraded run: " + ", ".join(response["degraded"]) +
+        story.append(Paragraph(_text("Degraded run: " + ", ".join(response.get("degraded_stages") or []) +
                                      " fell back to a simpler method."), small))
 
     story.append(Paragraph("Results", h2))

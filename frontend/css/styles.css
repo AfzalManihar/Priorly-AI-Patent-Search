@@ -208,7 +208,9 @@ select,.inp{height:36px;border:1px solid var(--line2);border-radius:8px;backgrou
 .aside .el:first-of-type{border-top:0}
 .aside .el .chip{margin-top:1px}
 .cov{display:flex;gap:6px;align-items:center;font-size:13px;margin:8px 0}
-.cov .track{flex:1;height:8px}
+.cov .track{flex:1;height:8px;display:flex}
+.cov .track i.half{background:var(--e1);opacity:.55}
+.chip.partial{border-style:dashed}
 .kv{display:flex;justify-content:space-between;font-size:13.5px;padding:7px 0;border-top:1px solid var(--line);color:var(--ink2)}
 .kv:first-of-type{border-top:0}
 .kv b{color:var(--ink);font-weight:500}

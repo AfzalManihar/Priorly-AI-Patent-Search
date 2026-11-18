@@ -11,6 +11,7 @@ import logging
 import queue
 import threading
 import time
+from types import SimpleNamespace
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
@@ -18,6 +19,7 @@ from dataclasses import asdict, dataclass
 from typing import Iterator
 
 from .corpus import Corpus
+from .evidence import PARTIAL, SUPPORTED, classify, term_recall
 from .fusion import rrf
 from .highlight import highlight
 from .llm import LLMError, heuristic_decompose
@@ -372,6 +374,7 @@ class Engine:
             t0 = time.perf_counter()
 
             reranked_n = 0
+            stats_before = self._scorer_stats()
             try:
                 deadline = t0 + s.rerank_budget_s if s.rerank_budget_s > 0 else None
                 relevance, best_chunk, reranked_n = yield from self._with_progress(
@@ -396,7 +399,12 @@ class Engine:
                 degraded.append("rerank")
 
             timings["rerank"] = _ms(t0)
-            log.info("rerank: %d of %d patents in %.1f s (budget %.0f s)", reranked_n, len(candidates), timings["rerank"] / 1000, s.rerank_budget_s)
+            used = {k: self._scorer_stats()[k] - stats_before[k] for k in stats_before}
+            log.info("rerank: %d of %d patents in %.1f s (budget %.0f s); %d pairs scored by the model in %.1f s over %d batches "
+                     "(batch %d, %d chunks per patent, element pairs %s), %d pairs from cache",
+                     reranked_n, len(candidates), timings["rerank"] / 1000, s.rerank_budget_s, used["scored"], used["model_s"],
+                     used["batches"], getattr(self.scorer, "batch_size", 0), s.rerank_chunks, "on" if s.rerank_elements else "off",
+                     used["cached"])
 
             yield stage(
                 "rerank",
@@ -541,6 +549,12 @@ class Engine:
 
     # ----------------------------------------------------------------- helpers
 
+    def _scorer_stats(self) -> dict:
+        stats = getattr(self.scorer, "stats", None)
+        raw = stats() if callable(stats) else {}
+        return {"scored": raw.get("scored", 0), "cached": raw.get("cached", 0),
+                "model_s": raw.get("model_s", 0.0), "batches": raw.get("batches", 0)}
+
     def _work_counters(self) -> dict:
         stats = getattr(self.scorer, "stats", None)
         scorer = stats() if callable(stats) else {"scored": 0, "cached": 0}
@@ -615,9 +629,10 @@ class Engine:
             raise box["error"]
         return box["value"]
 
-    def _score_by_deadline(self, pairs, deadline, step: int = 6):
+    def _score_by_deadline(self, pairs, deadline, step: int | None = None):
         """Score pairs a few at a time. Returns None if the deadline passes first, so one slow candidate cannot overrun the budget."""
         out: list[float] = []
+        step = step or max(1, int(getattr(self.scorer, "batch_size", 8)))
         for i in range(0, len(pairs), step):
             if deadline is not None and time.perf_counter() > deadline:
                 return None
@@ -639,7 +654,10 @@ class Engine:
         Scores for the candidates it did reach are exactly what an unlimited run would give them.
         """
         chunks = self.corpus.chunks
-        use_elements = bool(opts.decompose and len(texts) > 1)
+        s = self.settings
+        # Element pairs multiply the work by (1 + elements). They are off by default; coverage scores the few it needs.
+        use_elements = bool(s.rerank_elements and opts.decompose and len(texts) > 1)
+        per_patent = max(1, s.rerank_chunks)
         relevance: dict[str, float] = {}
         best_chunk: dict[str, int] = {}
         label = "patents reranked by the cross-encoder"
@@ -648,7 +666,7 @@ class Engine:
             if deadline is not None and time.perf_counter() > deadline:
                 return relevance, best_chunk, n - 1
 
-            chunk_ids = pool[pid]
+            chunk_ids = pool[pid] if use_elements else pool[pid][:per_patent]
             claim_scores = self._score_by_deadline([(claim, chunks[ci].text) for ci in chunk_ids], deadline)
             if claim_scores is None:
                 return relevance, best_chunk, n - 1
@@ -674,49 +692,43 @@ class Engine:
 
         return relevance, best_chunk, len(candidates)
 
-    def _coverage(self, texts, pid, pool=None):
+    def _coverage(self, texts, pid, pool=None, best_chunk=None):
+        """Per-element evidence on the passage that is shown. Returns (supported, shown_chunk_idx, partial).
+
+        Candidate passages are the one the reranker chose and the one sharing the most key terms with the elements.
+        An element is judged on each; the passage with the most support is displayed, and the counts come from that
+        same passage, so the evidence on screen always matches the coverage claimed.
         """
-        Per-element best score over all chunks of one patent.
-        Returns (covered, display_chunk_idx).
-        """
-        if getattr(getattr(self, "settings", None), "coverage_scope", "pool") != "all" and pool and pool.get(pid):
-            # The passages retrieval already surfaced. The reranker scored these pairs, so they come from its cache.
-            chunk_ids = list(pool[pid])
+        s = getattr(self, "settings", None)
+        if s is None or getattr(s, "coverage_scope", "pool") == "all" or not (pool and pool.get(pid)):
+            chunk_ids = list(self.corpus.by_patent[pid][:MAX_COVERAGE_CHUNKS])
         else:
-            chunk_ids = self.corpus.by_patent[pid][
-                :MAX_COVERAGE_CHUNKS
-            ]
-
-        pairs = [
-            (t, self.corpus.chunks[ci].text)
-            for ci in chunk_ids
-            for t in texts
-        ]
-
-        scores = self.scorer.score_pairs(pairs)
-
+            chunk_ids = list(pool[pid])
+        chunks = self.corpus.chunks
         n_el = len(texts)
 
-        matrix = [
-            scores[i * n_el:(i + 1) * n_el]
-            for i in range(len(chunk_ids))
-        ]
+        recall = {ci: [term_recall(t, chunks[ci].text) for t in texts] for ci in chunk_ids}
+        by_terms = max(chunk_ids, key=lambda ci: sum(recall[ci]))
+        shortlist = list(dict.fromkeys(([best_chunk] if best_chunk in recall else []) + [by_terms]))
 
-        threshold = self.scorer.coverage_threshold
+        th = SimpleNamespace(
+            support_recall=getattr(s, "support_recall", 0.6), partial_recall=getattr(s, "partial_recall", 0.3),
+            support_ce=getattr(s, "support_ce", 0.5), partial_ce=getattr(s, "partial_ce", 0.2))
+        if getattr(self.scorer, "name", "") == "lexical":  # offline scorer: its own calibrated level, no semantic check
+            th.support_ce = self.scorer.coverage_threshold
+            th.partial_ce = 0.6 * self.scorer.coverage_threshold
 
-        display = max(
-            range(len(chunk_ids)),
-            key=lambda i: sum(matrix[i]),
-        )
+        # Only pairs whose key terms overlap enough are worth a model call.
+        todo = [(ci, e) for ci in shortlist for e in range(n_el) if recall[ci][e] >= th.partial_recall]
+        scores = self.scorer.score_pairs([(texts[e], chunks[ci].text) for ci, e in todo]) if todo else []
+        ce = dict(zip(todo, scores))
 
-        # Coverage must match the exact passage shown as evidence.
-        covered = [
-            n
-            for n in range(1, n_el + 1)
-            if matrix[display][n - 1] >= threshold
-        ]
-
-        return covered, chunk_ids[display]
+        verdict = {ci: [classify(ce.get((ci, e)), recall[ci][e], th) for e in range(n_el)] for ci in shortlist}
+        shown = max(shortlist, key=lambda ci: (verdict[ci].count(SUPPORTED) * 2 + verdict[ci].count(PARTIAL),
+                                               sum(ce.get((ci, e), 0.0) for e in range(n_el)), ci == best_chunk))
+        supported = [e + 1 for e, v in enumerate(verdict[shown]) if v == SUPPORTED]
+        partial = [e + 1 for e, v in enumerate(verdict[shown]) if v == PARTIAL]
+        return supported, shown, partial
 
     def _explain(
         self,
@@ -741,6 +753,7 @@ class Engine:
             patent = corpus.patents[pid]
 
             covered: list[int] = []
+            partial: list[int] = []
 
             chunk_idx = best_chunk.get(
                 pid,
@@ -753,10 +766,11 @@ class Engine:
                 try:
                     if deadline is not None and time.perf_counter() > deadline:
                         raise BudgetExceeded("explain budget used up")
-                    covered, chunk_idx = self._coverage(
+                    covered, chunk_idx, partial = self._coverage(
                         texts,
                         pid,
                         pool,
+                        best_chunk.get(pid),
                     )
 
                 except Exception:
@@ -785,7 +799,7 @@ class Engine:
             marks = (
                 {
                     n: texts[n - 1]
-                    for n in covered
+                    for n in covered + partial
                 }
                 if opts.decompose
                 else {}
@@ -801,6 +815,7 @@ class Engine:
                     b_rank,
                     missed,
                     marks,
+                    partial,
                 )
             )
 
@@ -817,6 +832,7 @@ class Engine:
                 b_rank,
                 missed,
                 _,
+                partial,
             ) = item
 
             if opts.decompose:
@@ -825,15 +841,18 @@ class Engine:
                     for n in covered
                 )
 
-                if covered:
+                part_names = ", ".join(f"E{n}" for n in partial)
+                if covered or partial:
                     parts = [
-                        f"Model match for {names} ({chunk.loc}); this is a relevance signal, not verified disclosure."
+                        (f"Supported: {names}. " if covered else "")
+                        + (f"Partly supported: {part_names}. " if partial else "")
+                        + f"Evidence is in {chunk.loc}; this is a term and model match, not a legal reading of the claim."
                     ]
 
                     gap = [
                         n
                         for n in range(1, len(texts) + 1)
-                        if n not in covered
+                        if n not in covered and n not in partial
                     ]
 
                     if gap:
@@ -949,6 +968,7 @@ class Engine:
                 b_rank,
                 missed,
                 marks,
+                partial,
             ) = item
 
             results.append(
@@ -959,6 +979,7 @@ class Engine:
                     "year": patent.year,
                     "cpc": patent.cpc,
                     "el": covered,
+                    "el_partial": partial,
                     "dense": d_rank,
                     "bm25": b_rank,
                     "loc": chunk.loc,

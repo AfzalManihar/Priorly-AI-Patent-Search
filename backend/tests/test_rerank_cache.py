@@ -30,7 +30,7 @@ def test_cache_on_scores_a_pair_once_and_counts_reuse():
     second = scorer.score_pairs(PAIRS)
     assert second == first
     assert sum(len(c) for c in scorer.model.calls) == 2  # two distinct pairs, scored once in total
-    assert scorer.stats() == {"scored": 2, "cached": 4}
+    assert {k: scorer.stats()[k] for k in ("scored", "cached")} == {"scored": 2, "cached": 4}
 
 
 def test_cache_off_scores_every_search_again_with_identical_scores():

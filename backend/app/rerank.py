@@ -8,6 +8,7 @@ A scorer maps (query, passage) pairs to relevance scores in [0, 1].
 from __future__ import annotations
 
 import math
+import time
 from functools import lru_cache
 
 from .retrievers import DependencyError
@@ -41,6 +42,8 @@ class LexicalScorer:
         self._scored += len(pairs)
         return [lexical_score(q, p) for q, p in pairs]
 
+    batch_size = 16
+
     def stats(self) -> dict:
         return {"scored": self._scored, "cached": 0}
 
@@ -48,8 +51,11 @@ class LexicalScorer:
 class CrossEncoderScorer:
     name = "bge"
     coverage_threshold = 0.5
+    batch_size = 16
+    _model_s = 0.0
+    _batches = 0
 
-    def __init__(self, model_name: str, cache: bool = True):
+    def __init__(self, model_name: str, cache: bool = True, batch_size: int = 16):
         try:
             from sentence_transformers import CrossEncoder
         except ImportError as exc:  # pragma: no cover
@@ -58,9 +64,12 @@ class CrossEncoderScorer:
         # Identical (query, passage) pairs get the identical score, so remembering them never changes a ranking.
         # RERANK_CACHE=off turns the memory off, so every search runs the model on every pair again.
         self.cache_enabled = cache
+        self.batch_size = max(1, batch_size)
         self._cache: dict[tuple[str, str], float] = {}
         self._scored = 0
         self._reused = 0
+        self._model_s = 0.0  # seconds spent inside the model, so a slow search can be told apart from a slow pair count
+        self._batches = 0
 
     def score_pairs(self, pairs: list[tuple[str, str]]) -> list[float]:
         if not pairs:
@@ -69,7 +78,12 @@ class CrossEncoderScorer:
         missing = list(dict.fromkeys(p for p in pairs if p not in known))
         fresh: dict[tuple[str, str], float] = {}
         if missing:
-            logits = self.model.predict(missing, batch_size=4)
+            # Similar lengths share a batch, so short pairs are not padded to the longest one. Scores do not depend on order.
+            missing.sort(key=lambda p: len(p[0]) + len(p[1]))
+            t0 = time.perf_counter()
+            logits = self.model.predict(missing, batch_size=self.batch_size)
+            self._model_s += time.perf_counter() - t0
+            self._batches += -(-len(missing) // self.batch_size)
             for pair, x in zip(missing, logits):
                 fresh[pair] = 1.0 / (1.0 + math.exp(-float(x)))
             if self.cache_enabled:
@@ -79,12 +93,14 @@ class CrossEncoderScorer:
         return [fresh[p] if p in fresh else known[p] for p in pairs]
 
     def stats(self) -> dict:
-        return {"scored": self._scored, "cached": self._reused}
+        return {"scored": self._scored, "cached": self._reused,
+                "model_s": round(getattr(self, "_model_s", 0.0), 3), "batches": getattr(self, "_batches", 0)}
 
 
 def build_scorer(settings):
     if settings.rerank_backend == "lexical":
         return LexicalScorer()
     if settings.rerank_backend == "bge":
-        return CrossEncoderScorer(settings.rerank_model, cache=getattr(settings, "rerank_cache", True))
+        return CrossEncoderScorer(settings.rerank_model, cache=getattr(settings, "rerank_cache", True),
+                                  batch_size=getattr(settings, "rerank_batch", 16))
     raise ValueError(f"Unknown RERANK_BACKEND: {settings.rerank_backend}")
