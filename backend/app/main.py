@@ -535,7 +535,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         st = state(request)
         attacks = [{"name": n, "text": t, "action": inspect_claim(t).action} for n, t in REDTEAM]
         raw = read_json(st.settings.queries_path) if st.settings.queries_path else None
-        real = [q["claim"] for q in (raw or {}).get("queries", [])][:200] or [p.text[:600] for p in list(st.engine.corpus.patents.values())[:200]]
+        real = [q["claim"] for q in (raw or {}).get("queries", [])][:200] or [(p.abstract or (p.claims[0] if p.claims else ""))[:600] for p in list(st.engine.corpus.patents.values())[:200]]
         legit = [t for t in BENIGN + real]
         wrong = [t[:80] for t in legit if inspect_claim(t).action != "allow"]
         caught = sum(a["action"] != "allow" for a in attacks)
