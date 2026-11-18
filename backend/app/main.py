@@ -276,7 +276,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def record(st: State, payload: dict) -> None:
         st.metrics.record(payload)
         log.info("search id=%s results=%d degraded=%s timings_ms=%s llm_cache=%s", payload["search_id"],
-                 len(payload["results"]), ",".join(payload.get("degraded") or []) or "no",
+                 len(payload["results"]), ",".join(payload.get("degraded_stages") or []) or ("yes" if payload.get("degraded") else "no"),
                  json.dumps(payload.get("timings_ms")), json.dumps(st.store.cache_stats()))
 
     # ------------------------------------------------------------------- search
