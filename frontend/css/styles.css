@@ -425,3 +425,12 @@ td b{font-weight:600}
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* Align Retrieval Inspector controls */
+.row-ctl:has(#insSel) > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.row-ctl:has(#insSel) > #insReload {
+  align-self: center;
+}
