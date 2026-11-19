@@ -87,6 +87,9 @@
     changePassword: function (currentPassword, newPassword) { return request("POST", "/api/auth/change-password", { current_password: currentPassword, new_password: newPassword }); },
     logoutEverywhere: function () { return request("POST", "/api/auth/logout-everywhere", {}); },
     get: function (path) { return request("GET", path); },
+    deleteReport: function (id) { return request("DELETE", "/api/reports/" + encodeURIComponent(id)); },
+    del: function (path) { return request("DELETE", path); },
+    put: function (path, body) { return request("PUT", path, body); },
     post: function (path, body) { return request("POST", path, body); },
     downloadFile: function (path, filename) {
       return fetch(base + path, { headers: accessHeaders(false) }).then(function (r) {

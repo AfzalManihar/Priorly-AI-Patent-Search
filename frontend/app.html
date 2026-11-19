@@ -26,7 +26,7 @@
       <button class="btn primary auth-submit" type="submit" id="loginSubmit">Sign in</button>
     </form>
     <form id="registerForm" class="auth-form" hidden novalidate>
-      <label for="registerUsername">Username</label><input id="registerUsername" name="username" autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}" required>
+      <label for="registerUsername">Username</label><input id="registerUsername" name="username" autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._\-]{3,32}" required>
       <label for="registerPassword">Password</label><input id="registerPassword" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required aria-describedby="passwordHint">
       <small id="passwordHint" class="auth-hint">Use at least 12 characters.</small>
       <button class="btn primary auth-submit" type="submit" id="registerSubmit">Create account</button>
@@ -47,7 +47,8 @@
     <nav class="menu" aria-label="Workspace">
       <button data-view="search" aria-current="page"><span data-i="search"></span>New search</button>
       <button data-view="eval"><span data-i="chart"></span>Benchmark</button>
-      <button data-view="saved"><span data-i="bookmark"></span>Saved reports<span class="count" id="savedCount">3</span></button>
+      <button data-view="saved"><span data-i="file-clock"></span>Saved reports<span class="count" id="savedCount">3</span></button>
+      <button data-view="memory"><span data-i="bookmark"></span>History &amp; memory</button>
       <button data-view="lab"><span data-i="layers"></span>Experiments</button>
       <button data-view="playground"><span data-i="play"></span>Strategy playground</button>
       <button data-view="inspector"><span data-i="search"></span>Retrieval inspector</button>
@@ -200,8 +201,8 @@
           <label>Email<input class="inp" id="profileEmail" type="email" maxlength="254" autocomplete="email"></label>
           <label>Name<input class="inp" id="profileName" maxlength="80" autocomplete="name"></label>
           <label>Current learning topic<input class="inp" id="profileTopic" maxlength="160" placeholder="e.g. Patent search and prior art"></label>
-          <div style="grid-column:1/-1;display:flex;align-items:center;gap:10px"><input type="checkbox" id="memoryEnabled" checked><label for="memoryEnabled" style="display:inline;margin:0">Allow Priorly to save and use memories</label></div>
-          <p class="note" style="grid-column:1/-1;margin:0">When off, no memory is read, suggested or saved. Existing memories are kept until you delete them.</p>
+          <div style="grid-column:1/-1;display:flex;align-items:center;gap:10px"><input type="checkbox" id="memoryEnabled"><label for="memoryEnabled" style="display:inline;margin:0">Allow Priorly to save my personal notes and show them while I search</label></div>
+          <p class="note" style="grid-column:1/-1;margin:0">Off by default. When off, no note is saved, read or suggested. Notes are never sent to the AI model; they are only matched on this server against your own claim. Existing notes are kept (hidden) until you delete them in History &amp; memory.</p>
           <div style="grid-column:1/-1"><button class="btn primary" type="submit" id="profileSaveBtn">Save changes</button><p class="note" id="profileNote" aria-live="polite"></p></div>
         </form>
       </div>
@@ -218,6 +219,25 @@
         <p>Sign out of every device where you are logged in.</p>
         <button class="btn" type="button" id="logoutEverywhereBtn">Sign out everywhere</button>
         <button class="btn ghost sm logout-btn" id="logoutBtn" type="button">Log out</button>
+      </div>
+    </section>
+    <section class="view" id="v-memory">
+      <div class="top"><div><h1>History &amp; memory</h1><p>Your own past searches and personal notes. Only you can see them.</p></div></div>
+      <div class="card" style="margin-bottom:18px">
+        <h3>Search history</h3>
+        <div class="mem-row"><input class="inp" id="histQuery" type="search" maxlength="200" placeholder="Filter your past searches" aria-label="Filter your past searches"></div>
+        <div class="list" id="histList" aria-live="polite"></div>
+        <div class="mem-row"><button class="btn" id="histMore" type="button" hidden>Load more</button><span class="note" id="histNote"></span></div>
+      </div>
+      <div class="card">
+        <h3>Personal notes</h3>
+        <p class="note" id="memStatus"></p>
+        <form class="mem-row" id="noteForm">
+          <textarea class="inp" id="noteText" maxlength="1000" rows="2" placeholder="e.g. I mostly search wireless charging prior art" aria-label="New note"></textarea>
+          <button class="btn primary" type="submit" id="noteAdd">Save note</button>
+        </form>
+        <div class="list" id="noteList" aria-live="polite"></div>
+        <div class="mem-row"><button class="btn" id="memToggle" type="button"></button><button class="btn ghost danger" id="noteClear" type="button">Delete all notes</button><span class="note" id="noteNote" aria-live="polite"></span></div>
       </div>
     </section>
     <section class="view" id="v-lab"></section>

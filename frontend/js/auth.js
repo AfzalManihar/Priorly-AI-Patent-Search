@@ -54,7 +54,7 @@
     $("userAvatar").textContent = user.username.slice(0, 1).toUpperCase();
     if (!dashboardLoaded) {
       dashboardLoaded = true;
-      loadScript("js/app.js").then(function () { return loadScript("js/lab.js"); }).catch(function () {
+      loadScript("js/app.js").then(function () { return loadScript("js/lab.js"); }).then(function () { return loadScript("js/memory.js"); }).catch(function () {
         dashboardLoaded = false;
         app.classList.add("auth-hidden"); app.setAttribute("aria-hidden", "true");
         showGate(false); message("The workspace could not load. Refresh the page and try again.");
@@ -116,7 +116,7 @@
       $("profileEmail").value = p.email || "";
       $("profileName").value = p.display_name || "";
       $("profileTopic").value = p.learning_topic || "";
-      $("memoryEnabled").checked = p.memory_enabled !== false;
+      $("memoryEnabled").checked = !!p.memory_enabled;
       showProfileNote("profileNote", "", false);
     }).catch(function (error) { showProfileNote("profileNote", authError(error), true); });
   }

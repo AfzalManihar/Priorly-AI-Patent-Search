@@ -42,12 +42,16 @@ def test_errors_never_leak_exception_text(client, claim, monkeypatch):
 
     monkeypatch.setattr(client.app.state.s.engine, "search", boom)
     quiet = TestClient(client.app, raise_server_exceptions=False)  # lifespan state is already set up
+    quiet.cookies.update(client.cookies)
+    quiet.headers.update(client.headers)
     r = quiet.post("/api/search", json={"claim": claim})
     assert r.status_code == 500 and "secret" not in r.text
 
 
 def test_rate_limit(tmp_path, claim):
     with TestClient(create_app(make_settings(tmp_path, rate_limit_per_min=2))) as c:
+        from tests.conftest import login
+        login(c, "tester")
         assert c.post("/api/search", json={"claim": claim}).status_code == 200
         assert c.post("/api/search", json={"claim": claim}).status_code == 200
         r = c.post("/api/search", json={"claim": claim})
@@ -108,7 +112,7 @@ def test_csv_export_neutralises_formula_cells(client):
     body = resp.json()
     body["results"][0]["title"] = "=HYPERLINK(\"http://x\")"
     store = client.app.state.s.store
-    store.save_search(body["search_id"], {}, body)
+    store.save_search(body["search_id"], {}, body, user_id=client.get("/api/auth/me").json()["user"]["id"])
     rid = client.post("/api/reports", json={"search_id": body["search_id"], "title": "t", "shortlist": []}).json()["report_id"]
     text = client.get(f"/api/reports/{rid}/export.csv").text
     assert "'=HYPERLINK" in text and ",=HYPERLINK" not in text

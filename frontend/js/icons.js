@@ -12,6 +12,7 @@
     play: '<path d="M7 4v16l13-8z"/>',
     x: '<path d="M6 6l12 12M18 6 6 18"/>',
     layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
+    'file-clock': '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3"/><path d="M14 3v5h5"/><path d="M19 8v2"/><path d="M8 13h4M8 17h2"/><circle cx="16.5" cy="17.5" r="4"/><path d="M16.5 15.5v2l1.3.8"/>',
     file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
     trace: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
     'shield-check': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',

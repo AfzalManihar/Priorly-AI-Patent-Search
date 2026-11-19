@@ -2,6 +2,7 @@
 
 Run from backend/: python -m app.admin reset-password USERNAME
                     python -m app.admin delete-user USERNAME
+                    python -m app.admin claim-legacy USERNAME --yes
 """
 from __future__ import annotations
 
@@ -28,6 +29,9 @@ def main(argv: list[str] | None = None) -> int:
     reset.add_argument("username")
     delete = sub.add_parser("delete-user", help="delete an account and revoke its sessions")
     delete.add_argument("username")
+    claim = sub.add_parser("claim-legacy", help="give searches/reports saved before login existed to one user")
+    claim.add_argument("username")
+    claim.add_argument("--yes", action="store_true", help="confirm the ownership change")
     args = parser.parse_args(argv)
 
     store = Store(Settings.from_env().db_path)
@@ -52,6 +56,17 @@ def main(argv: list[str] | None = None) -> int:
                 print("User not found.", file=sys.stderr)
                 return 1
             print("User deleted; associated sessions revoked.")
+            return 0
+        if args.command == "claim-legacy":
+            user = store.user_by_username(args.username.lower())
+            if not user:
+                print("User not found.", file=sys.stderr)
+                return 1
+            if not args.yes:
+                print("Add --yes to assign every ownerless search and report to this user. Nothing was changed.")
+                return 2
+            moved = store.claim_legacy(user["id"])
+            print(f"Assigned {moved['searches']} searches and {moved['reports']} reports to {user['username']}.")
             return 0
     finally:
         store.db.close()

@@ -167,7 +167,16 @@ class ProfileRequest(BaseModel):
     email: str = Field(default="", max_length=254)
     display_name: str = Field(default="", max_length=80)
     learning_topic: str = Field(default="", max_length=160)
-    memory_enabled: bool = True
+    memory_enabled: bool = False
+
+
+class RecallRequest(BaseModel):
+    claim: str = Field(max_length=20000)
+    exclude_id: str | None = Field(default=None, max_length=64)
+
+
+class NoteRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
 
 
 class PasswordChangeRequest(BaseModel):
@@ -360,9 +369,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         session = st.store.get_session(_token_hash(token))
         return (st, session) if session else None
 
-    def owner_id(request: Request) -> str | None:
+    def owner_id(request: Request) -> str:
+        """The signed-in user's id. Every private endpoint calls this first, so anonymous callers get 401
+        and can never read or create records that belong to nobody."""
         current = current_session(request)
-        return current[1]["user_id"] if current else None
+        if not current:
+            raise ApiError(401, "not_authenticated", "Log in to continue.")
+        return current[1]["user_id"]
+
+    def require_admin(request: Request) -> None:
+        current = current_session(request)
+        if not current:
+            raise ApiError(401, "not_authenticated", "Log in to continue.")
+        if not current[1]["is_admin"]:
+            raise ApiError(403, "admin_only", "Only the administrator can do this.")
 
     def set_session_cookies(response: Response, request: Request, session_token: str, csrf_token: str) -> None:
         secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").lower() == "https"
@@ -543,8 +563,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # ------------------------------------------------------------------- search
     @app.post("/api/search")
     def search(body: SearchRequest, request: Request):
-        st = guard_search(request, body)
         user_id = owner_id(request)
+        st = guard_search(request, body)
         payload = st.engine.search(body.claim.strip(), Options(**body.options.model_dump()), body.k)
         st.store.save_search(payload["search_id"], body.model_dump(), payload, user_id=user_id)
         record(st, payload)
@@ -552,8 +572,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/search/stream")
     def search_stream(body: SearchRequest, request: Request):
-        st = guard_search(request, body)
         user_id = owner_id(request)
+        st = guard_search(request, body)
         events = st.engine.run_events(body.claim.strip(), Options(**body.options.model_dump()), body.k)
 
         def sse():
@@ -606,6 +626,80 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ApiError(400, "confirm_required", "Add confirm=yes to erase all stored searches and reports.")
         return {"deleted": state(request).store.delete_all(owner_id(request))}
 
+    # ------------------------------------------------- history, similar searches and memory notes
+    # Everything below is scoped to the signed-in user. Nothing here calls an LLM, so it costs no tokens.
+    def memory_on(st: State, user_id: str) -> bool:
+        profile = st.store.profile_by_id(user_id)
+        return bool(profile and profile["memory_enabled"])
+
+    @app.get("/api/history")
+    def history(request: Request, limit: int = Query(default=20, ge=1, le=100),
+                offset: int = Query(default=0, ge=0), q: str = Query(default="", max_length=200)):
+        return state(request).store.history_page(owner_id(request), limit, offset, q)
+
+    @app.post("/api/memory/recall")
+    def memory_recall(body: RecallRequest, request: Request):
+        """Past searches of this user that resemble the claim, plus (only with consent) their relevant notes."""
+        user_id = owner_id(request)
+        st = state(request)
+        claim = body.claim.strip()
+        enabled = memory_on(st, user_id)
+        if len(claim) < 20:
+            return {"similar": [], "notes": [], "memory_enabled": enabled}
+        similar = st.store.similar_searches(user_id, claim, limit=5, exclude_id=body.exclude_id)
+        notes = st.store.relevant_notes(user_id, claim, limit=3) if enabled else []
+        return {"similar": similar, "notes": notes, "memory_enabled": enabled}
+
+    @app.get("/api/memory/notes")
+    def list_notes(request: Request):
+        user_id = owner_id(request)
+        st = state(request)
+        return {"notes": st.store.list_notes(user_id), "memory_enabled": memory_on(st, user_id)}
+
+    def clean_note(text: str) -> str:
+        text = text.strip()
+        if not text:
+            raise ApiError(422, "empty_note", "Write something to remember.")
+        verdict = inspect_claim(text)
+        if verdict.blocked:
+            raise ApiError(422, "guardrail_blocked", verdict.message)
+        return verdict.cleaned.strip()
+
+    @app.post("/api/memory/notes", status_code=201)
+    def add_note(body: NoteRequest, request: Request):
+        user_id = owner_id(request)
+        st = state(request)
+        if not memory_on(st, user_id):
+            raise ApiError(403, "memory_off", "Turn on memory in Profile & Privacy before saving notes.")
+        note = st.store.add_note(user_id, clean_note(body.text))
+        if note is None:
+            raise ApiError(409, "note_limit", "You have reached the limit of saved notes. Delete one first.")
+        return note
+
+    @app.put("/api/memory/notes/{note_id}")
+    def edit_note(note_id: str, body: NoteRequest, request: Request):
+        user_id = owner_id(request)
+        st = state(request)
+        if not memory_on(st, user_id):
+            raise ApiError(403, "memory_off", "Turn on memory in Profile & Privacy before editing notes.")
+        note = st.store.update_note(user_id, note_id, clean_note(body.text))
+        if note is None:
+            raise ApiError(404, "not_found", "That note does not exist.")
+        return note
+
+    @app.delete("/api/memory/notes/{note_id}")
+    def remove_note(note_id: str, request: Request):
+        if not state(request).store.delete_note(owner_id(request), note_id):
+            raise ApiError(404, "not_found", "That note does not exist.")
+        return {"deleted": 1}
+
+    @app.delete("/api/memory/notes")
+    def remove_all_notes(request: Request, confirm: str = Query(default="")):
+        user_id = owner_id(request)
+        if confirm != "yes":
+            raise ApiError(400, "confirm_required", "Add confirm=yes to delete every saved note.")
+        return {"deleted": state(request).store.delete_all_notes(user_id)}
+
     # ---------------------------------------------------------------- benchmark
     @app.get("/api/benchmark")
     def benchmark(request: Request):
@@ -630,6 +724,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         best = max((r["score"] for r in results), default=0.0)
         return st.store.save_report("r_" + uuid.uuid4().hex[:10], body.title, body.search_id,
                                     body.shortlist, len(results), best, user_id=user_id)
+
+    @app.delete("/api/reports/{report_id}")
+    def delete_report(report_id: str, request: Request):
+        if not state(request).store.delete_report(report_id, owner_id(request)):
+            raise ApiError(404, "not_found", "That report does not exist.")
+        return {"deleted": 1}
 
     @app.get("/api/reports/{report_id}/export.csv")
     def export_report(report_id: str, request: Request):
@@ -681,10 +781,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/settings")
     def get_settings(request: Request):
+        owner_id(request)
         return current_settings(state(request))
 
     @app.put("/api/settings")
     def put_settings(body: SettingsModel, request: Request):
+        require_admin(request)  # these settings are global for every user
         st = state(request)
         changes = body.model_dump(exclude_none=True)
         for key in RUNTIME_SETTINGS:
@@ -738,6 +840,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from eval.metrics import average_precision, hit_rate_at_k, ndcg_at_k, precision_at_k, recall_at_k, reciprocal_rank
         from .retrievers import Constraints
 
+        owner_id(request)
         st = state(request)
         wait = st.limiter.check(request.client.host if request.client else "local")
         if wait is not None:
@@ -793,6 +896,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/guardrails/check")
     def guardrails_check(body: dict, request: Request):
         """Run the input guardrail on any text without starting a search. Used by the Safety page tester."""
+        owner_id(request)
         st = state(request)
         text = str(body.get("text", ""))[:20000]
         verdict = inspect_claim(text)
@@ -801,11 +905,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/guardrails/events")
     def guardrails_events(request: Request, limit: int = Query(default=30, ge=1, le=200)):
+        require_admin(request)  # the event log holds excerpts from every user's blocked inputs
         return state(request).store.guardrail_summary(limit)
 
     @app.get("/api/guardrails/selftest")
     def guardrails_selftest(request: Request):
         """Measured, not claimed: the red-team list must be caught and the real benchmark claims must pass."""
+        owner_id(request)
         st = state(request)
         attacks = [{"name": n, "text": t, "action": inspect_claim(t).action} for n, t in REDTEAM]
         raw = read_json(st.settings.queries_path) if st.settings.queries_path else None
@@ -820,6 +926,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/usage")
     def usage(request: Request):
+        owner_id(request)
         st = state(request)
         limit = st.settings.daily_token_limit
         used = st.store.tokens_since(86400)
@@ -849,8 +956,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/metrics")
     def metrics(request: Request):
+        user_id = owner_id(request)
         st = state(request)
-        return {**st.metrics.snapshot(), "llm_cache": st.store.cache_stats(), "stored": st.store.counts()}
+        return {**st.metrics.snapshot(), "llm_cache": st.store.cache_stats(), "stored": st.store.counts(user_id)}
 
     if cfg.frontend_dir:
         app.mount("/", StaticFiles(directory=str(cfg.frontend_dir), html=True), name="frontend")

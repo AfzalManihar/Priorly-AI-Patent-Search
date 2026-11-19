@@ -100,3 +100,18 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* History & memory, similar searches */
+.mem-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+.mem-row .inp { flex: 1 1 260px; }
+.mem-item { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line, #e4e4e4); }
+.mem-text { min-width: 0; flex: 1; }
+.mem-claim { overflow-wrap: anywhere; }
+.mem-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.btn.danger { color: #c44747; }
+.recall { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line, #e4e4e4); border-radius: 10px; background: var(--surface2, transparent); }
+.recall-title { font-weight: 600; margin-bottom: 6px; }
+.recall-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 4px 0; }
+.recall-claim { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 650px) { .mem-item { flex-direction: column; } }
+.mem-row [hidden], .recall[hidden], #histMore[hidden] { display: none !important; }

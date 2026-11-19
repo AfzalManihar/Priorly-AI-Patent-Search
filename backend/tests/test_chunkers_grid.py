@@ -99,6 +99,8 @@ def test_experiment_endpoints(tmp_path, monkeypatch):
     grid.main()
     settings = make_settings(tmp_path, corpus_path=out / "corpus.jsonl", queries_path=out / "queries.json")
     with TestClient(create_app(settings)) as c:
+        from tests.conftest import login
+        login(c, "tester")
         assert c.get("/api/experiments").json()["meta"]["complete"] is True
         d = c.get("/api/default-config").json()
         assert d["available"] and set(d["pipeline_options"]) == {"decompose", "hyde", "hybrid", "dense", "prf", "rerank"}

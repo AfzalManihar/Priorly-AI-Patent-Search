@@ -795,7 +795,8 @@
         var link = s.report_id
           ? ' <button class="btn sm" type="button" data-export="csv" data-report-id="' + esc(s.report_id) +
             '">Export CSV</button> <button class="btn sm" type="button" data-export="pdf" data-report-id="' +
-            esc(s.report_id) + '">Export PDF</button>'
+            esc(s.report_id) + '">Export PDF</button> <button class="btn sm danger" type="button" data-delete="' +
+            esc(s.report_id) + '">Delete</button>'
           : "";
 
         return '<div class="item"><div><b>' + esc(s.title) +
@@ -811,6 +812,18 @@
         });
       });
     }
+
+    host.onclick = function (event) {
+      var del = event.target.closest && event.target.closest("[data-delete]");
+      if (!del) return;
+      if (!window.confirm("Delete this saved report? The search itself stays in your history.")) return;
+      del.disabled = true;
+      PriorlyAPI.deleteReport(del.getAttribute("data-delete")).then(function () {
+        toast("Report deleted");
+        renderSaved();
+        refreshSavedCount();
+      }).catch(function (e) { del.disabled = false; toast(e.message); });
+    };
 
     if (live) {
       PriorlyAPI.listReports().then(function (list) {
@@ -1208,33 +1221,42 @@
   $("#results").innerHTML =
     '<div class="empty" style="margin-top:16px"><h3>Find your first prior art</h3><p>The sample claim is loaded. Run the search to see ranked results with matching passages.</p></div>';
 
+  function openSaved(saved) {
+    var req = saved.request || {};
+    var response = saved.response || {};
+    var settings = req.options || {};
+
+    if (!response.results || !response.results.length) return false;
+
+    $("#claim").value = req.claim || "";
+    count();
+    [
+      ["optDecompose", "decompose"],
+      ["optHyde", "hyde"],
+      ["optHybrid", "hybrid"],
+      ["optRerank", "rerank"],
+      ["optDense", "dense"],
+      ["optPrf", "prf"]
+    ].forEach(function (pair) {
+      var input = $("#" + pair[0]);
+      if (input && settings[pair[1]] != null) input.checked = !!settings[pair[1]];
+    });
+
+    if (req.k != null) $("#optK").value = String(req.k);
+    var options = opts();
+    finish(options, adapt(response, options), 0);
+    return true;
+  }
+  /* Used by the History & memory view: opens a saved search without running the pipeline again. */
+  window.PriorlyOpenSaved = function (saved) {
+    show("search");
+    return openSaved(saved);
+  };
+
   function restoreLatestSearch() {
     if (!live) return Promise.resolve();
 
-    return PriorlyAPI.get("/api/search/latest").then(function (saved) {
-      var req = saved.request || {};
-      var response = saved.response || {};
-      var settings = req.options || {};
-
-      if (!response.results || !response.results.length) return;
-
-      $("#claim").value = req.claim || "";
-      [
-        ["optDecompose", "decompose"],
-        ["optHyde", "hyde"],
-        ["optHybrid", "hybrid"],
-        ["optRerank", "rerank"],
-        ["optDense", "dense"],
-        ["optPrf", "prf"]
-      ].forEach(function (pair) {
-        var input = $("#" + pair[0]);
-        if (input && settings[pair[1]] != null) input.checked = !!settings[pair[1]];
-      });
-
-      if (req.k != null) $("#optK").value = String(req.k);
-      var options = opts();
-      finish(options, adapt(response, options), 0);
-    }).catch(function (err) {
+    return PriorlyAPI.get("/api/search/latest").then(openSaved).catch(function (err) {
       if (err.status !== 404 && err.status !== 401) {
         console.warn("Could not restore saved search:", err.code);
       }
@@ -1246,7 +1268,7 @@
   }).then(function () {
     refreshSavedCount();
     var h = (location.hash || "").replace("#", "");
-    if (["search", "eval", "saved", "settings", "profile"].indexOf(h) > -1) {
+    if (["search", "eval", "saved", "settings", "profile", "memory"].indexOf(h) > -1) {
       show(h);
     }
     return restoreLatestSearch();
