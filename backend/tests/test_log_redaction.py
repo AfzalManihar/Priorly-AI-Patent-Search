@@ -37,3 +37,13 @@ def test_percent_formatting_with_numbers_is_unchanged():
     log, stream = _logger()
     log.info("rerank: %d of %d patents in %.1f s", 5, 20, 45.2)
     assert stream.getvalue().strip() == "rerank: 5 of 20 patents in 45.2 s"
+
+
+def test_auth_secrets_are_redacted():
+    from app.guardrails import redact
+
+    value = 'password="plain-password" priorly_session=opaque-session csrf_token=csrf-secret invite_code=invite-secret'
+    cleaned = redact(value)
+    for secret in ("plain-password", "opaque-session", "csrf-secret", "invite-secret"):
+        assert secret not in cleaned
+    assert cleaned.count("[redacted]") >= 4

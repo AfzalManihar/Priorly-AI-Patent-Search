@@ -1208,15 +1208,47 @@
   $("#results").innerHTML =
     '<div class="empty" style="margin-top:16px"><h3>Find your first prior art</h3><p>The sample claim is loaded. Run the search to see ranked results with matching passages.</p></div>';
 
+  function restoreLatestSearch() {
+    if (!live) return Promise.resolve();
+
+    return PriorlyAPI.get("/api/search/latest").then(function (saved) {
+      var req = saved.request || {};
+      var response = saved.response || {};
+      var settings = req.options || {};
+
+      if (!response.results || !response.results.length) return;
+
+      $("#claim").value = req.claim || "";
+      [
+        ["optDecompose", "decompose"],
+        ["optHyde", "hyde"],
+        ["optHybrid", "hybrid"],
+        ["optRerank", "rerank"],
+        ["optDense", "dense"],
+        ["optPrf", "prf"]
+      ].forEach(function (pair) {
+        var input = $("#" + pair[0]);
+        if (input && settings[pair[1]] != null) input.checked = !!settings[pair[1]];
+      });
+
+      if (req.k != null) $("#optK").value = String(req.k);
+      var options = opts();
+      finish(options, adapt(response, options), 0);
+    }).catch(function (err) {
+      if (err.status !== 404 && err.status !== 401) {
+        console.warn("Could not restore saved search:", err.code);
+      }
+    });
+  }
+
   PriorlyAPI.health().then(setMode, function () {
     setMode(null);
   }).then(function () {
     refreshSavedCount();
-
     var h = (location.hash || "").replace("#", "");
-
-    if (["search", "eval", "saved", "settings"].indexOf(h) > -1) {
+    if (["search", "eval", "saved", "settings", "profile"].indexOf(h) > -1) {
       show(h);
     }
+    return restoreLatestSearch();
   });
 })();

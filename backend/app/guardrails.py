@@ -222,7 +222,12 @@ def inspect_claim(text: str) -> Verdict:
 
 
 # -- secrets ---------------------------------------------------------------------------------------------
-_SECRET = re.compile(r"gsk_[A-Za-z0-9]{8,}|sk-[A-Za-z0-9]{16,}|(?i:bearer)\s+[A-Za-z0-9._\-]{12,}|(?i:api[_-]?key)\s*[=:]\s*\S+")
+_SECRET = re.compile(
+    r"gsk_[A-Za-z0-9]{8,}|sk-[A-Za-z0-9]{16,}|(?i:bearer)\s+[A-Za-z0-9._\-]{12,}"
+    r"|(?i:api[_-]?key)\s*[=:]\s*[^,;\s]+"
+    r"|(?i:\b(?:password|passwd|session(?:_token)?|csrf(?:_token)?|invite_code|cookie)\b)\s*[\"']?\s*[:=]\s*[\"']?[^,;\s\"'}]+"
+    r"|(?i:priorly_(?:session|csrf))=[^;\s]+"
+)
 
 
 def redact(text: str) -> str:

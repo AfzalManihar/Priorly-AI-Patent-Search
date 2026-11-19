@@ -12,16 +12,22 @@
     return new ApiError(status, e.code || "http_" + status, e.message || "The request failed. Try again.");
   }
 
-  function accessHeaders(jsonBody) {
+  function csrfToken() {
+    var match = document.cookie.match(/(?:^|; )priorly_csrf=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : "";
+  }
+
+  function accessHeaders(jsonBody, mutating) {
     var headers = {};
     if (jsonBody) headers["Content-Type"] = "application/json";
+    if (mutating && csrfToken()) headers["X-CSRF-Token"] = csrfToken();
     return headers;
   }
 
   function request(method, path, body) {
     return fetch(base + path, {
       method: method,
-      headers: accessHeaders(!!body),
+      headers: accessHeaders(!!body, /^(POST|PUT|PATCH|DELETE)$/i.test(method)),
       body: body ? JSON.stringify(body) : undefined
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (json) {
@@ -37,7 +43,7 @@
   function searchStream(claim, options, k, onEvent) {
     return fetch(base + "/api/search/stream", {
       method: "POST",
-      headers: accessHeaders(true),
+      headers: accessHeaders(true, true),
       body: JSON.stringify({ claim: claim, options: options, k: k })
     }).then(function (r) {
       if (!r.ok) {
@@ -72,6 +78,14 @@
   window.PriorlyAPI = {
     ApiError: ApiError,
     health: function () { return request("GET", "/api/health"); },
+    currentUser: function () { return request("GET", "/api/auth/me"); },
+    login: function (username, password) { return request("POST", "/api/auth/login", { username: username, password: password }); },
+    signup: function (username, password) { return request("POST", "/api/auth/signup", { username: username, password: password }); },
+    logout: function () { return request("POST", "/api/auth/logout", {}); },
+    getProfile: function () { return request("GET", "/api/auth/profile"); },
+    saveProfile: function (profile) { return request("PUT", "/api/auth/profile", profile); },
+    changePassword: function (currentPassword, newPassword) { return request("POST", "/api/auth/change-password", { current_password: currentPassword, new_password: newPassword }); },
+    logoutEverywhere: function () { return request("POST", "/api/auth/logout-everywhere", {}); },
     get: function (path) { return request("GET", path); },
     post: function (path, body) { return request("POST", path, body); },
     downloadFile: function (path, filename) {

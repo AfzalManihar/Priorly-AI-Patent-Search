@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <link rel="icon" type="image/png" href="/assets/priorly-logo.png?v=1">
@@ -13,16 +13,37 @@
 <script>
   (function(){try{var t=localStorage.getItem("priorly-theme");if(!t&&window.matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}})();
 </script>
+  <link rel="stylesheet" href="/css/profile.css?v=1">
 </head>
-<body>
-<div class="app">
+<body class="auth-pending">
+<section id="authGate" class="auth-gate" aria-labelledby="authTitle">
+  <div class="auth-card">
+    <a href="index.html" class="logo auth-logo" aria-label="Priorly home"><img src="/assets/priorly-logo.png" alt="" aria-hidden="true">Priorly</a>
+    <div class="auth-intro"><p class="auth-eyebrow">PATENT INTELLIGENCE WORKSPACE</p><h1 id="authTitle">Checking your session</h1><p id="authSubtitle">Please wait while Priorly verifies your sign-in.</p></div>
+    <form id="loginForm" class="auth-form" hidden novalidate>
+      <label for="loginUsername">Username</label><input id="loginUsername" name="username" autocomplete="username" minlength="3" maxlength="32" required>
+      <label for="loginPassword">Password</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+      <button class="btn primary auth-submit" type="submit" id="loginSubmit">Sign in</button>
+    </form>
+    <form id="registerForm" class="auth-form" hidden novalidate>
+      <label for="registerUsername">Username</label><input id="registerUsername" name="username" autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}" required>
+      <label for="registerPassword">Password</label><input id="registerPassword" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required aria-describedby="passwordHint">
+      <small id="passwordHint" class="auth-hint">Use at least 12 characters.</small>
+      <button class="btn primary auth-submit" type="submit" id="registerSubmit">Create account</button>
+    </form>
+    <p id="authMessage" class="auth-message" role="status" aria-live="polite">Checking your sessionâ€¦</p>
+    <p class="auth-switch" id="authSwitchRow" hidden><span id="authSwitchText">New to Priorly?</span> <button type="button" id="authSwitch" class="auth-link">Create an account</button></p>
+    <button type="button" id="authThemeBtn" class="auth-theme" aria-label="Toggle dark or light theme"><span id="authThemeLabel">Use dark theme</span></button>
+  </div>
+</section>
+<div class="app auth-hidden" aria-hidden="true">
 
   <aside class="side">
     <a href="index.html" class="logo" aria-label="Priorly home">
       <img src="/assets/priorly-logo.png" alt="" aria-hidden="true">
       Priorly
     </a>
-    <div class="ws"><div class="avatar">AM</div><div><b>Afzal's workspace</b><small id="wsInfo">Checking the API…</small></div></div>
+    <div class="ws"><div class="avatar" id="userAvatar" aria-hidden="true">U</div><div class="user-meta"><b id="currentUsername">Workspace</b><small id="wsInfo">Checking the APIâ€¦</small></div></div>
     <nav class="menu" aria-label="Workspace">
       <button data-view="search" aria-current="page"><span data-i="search"></span>New search</button>
       <button data-view="eval"><span data-i="chart"></span>Benchmark</button>
@@ -33,6 +54,7 @@
       <button data-view="obs"><span data-i="trace"></span>Observability</button>
       <button data-view="safety"><span data-i="shield-check"></span>Safety</button>
       <button data-view="settings"><span data-i="settings"></span>Pipeline settings</button>
+      <button data-view="profile"><span data-i="user"></span>Profile &amp; Privacy</button>
     </nav>
     <div class="foot">
       <div class="usage" id="tokenMeter">LLM tokens<div class="track"><i style="width:0"></i></div><div style="margin-top:6px">Loading...</div></div>
@@ -122,7 +144,7 @@
       </div>
       <div class="card">
         <h3>RAGAS Offline Evaluation</h3>
-        <p class="note">ID-based retrieval metrics · Recall@10 and Precision@10 · Offline benchmark results</p>
+        <p class="note">ID-based retrieval metrics Â· Recall@10 and Precision@10 Â· Offline benchmark results</p>
         <div id="ragasHost"></div>
       </div>
     </section>
@@ -169,6 +191,35 @@
         </div>
       </div>
     </section>
+    <!-- Profile and privacy -->
+    <section class="view" id="v-profile">
+      <div class="top"><div><h1>Profile and privacy</h1><p>Manage your account details, preferences and active sessions.</p></div></div>
+      <div class="card" style="margin-bottom:18px">
+        <h3>Profile and preferences</h3>
+        <form class="form" id="profileForm">
+          <label>Email<input class="inp" id="profileEmail" type="email" maxlength="254" autocomplete="email"></label>
+          <label>Name<input class="inp" id="profileName" maxlength="80" autocomplete="name"></label>
+          <label>Current learning topic<input class="inp" id="profileTopic" maxlength="160" placeholder="e.g. Patent search and prior art"></label>
+          <div style="grid-column:1/-1;display:flex;align-items:center;gap:10px"><input type="checkbox" id="memoryEnabled" checked><label for="memoryEnabled" style="display:inline;margin:0">Allow Priorly to save and use memories</label></div>
+          <p class="note" style="grid-column:1/-1;margin:0">When off, no memory is read, suggested or saved. Existing memories are kept until you delete them.</p>
+          <div style="grid-column:1/-1"><button class="btn primary" type="submit" id="profileSaveBtn">Save changes</button><p class="note" id="profileNote" aria-live="polite"></p></div>
+        </form>
+      </div>
+      <div class="card" style="margin-bottom:18px">
+        <h3>Change password</h3>
+        <form class="form" id="passwordForm">
+          <label style="grid-column:1/-1">Current password<input class="inp" id="currentPassword" type="password" autocomplete="current-password" required></label>
+          <label style="grid-column:1/-1">New password<input class="inp" id="newPassword" type="password" minlength="12" autocomplete="new-password" required><span class="hint">At least 12 characters.</span></label>
+          <div style="grid-column:1/-1"><button class="btn primary" type="submit">Change password</button><p class="note" id="passwordNote" aria-live="polite"></p></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3>Sessions</h3>
+        <p>Sign out of every device where you are logged in.</p>
+        <button class="btn" type="button" id="logoutEverywhereBtn">Sign out everywhere</button>
+        <button class="btn ghost sm logout-btn" id="logoutBtn" type="button">Log out</button>
+      </div>
+    </section>
     <section class="view" id="v-lab"></section>
     <section class="view" id="v-playground"></section>
     <section class="view" id="v-inspector"></section>
@@ -185,7 +236,6 @@
 <script src="js/config.js"></script>
 <script src="js/data.js"></script>
 <script src="js/api.js"></script>
-<script src="js/app.js"></script>
-<script src="js/lab.js"></script>
+<script src="js/auth.js"></script>
 </body>
 </html>

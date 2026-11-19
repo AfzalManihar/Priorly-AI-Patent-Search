@@ -1,0 +1,102 @@
+﻿/* Priorly Profile & Privacy */
+#v-profile {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+#v-profile > .top {
+  margin-bottom: 24px;
+}
+
+#v-profile > .card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  margin-bottom: 18px;
+}
+
+#v-profile > .card h3 {
+  font-size: 17px;
+  font-weight: 650;
+  margin: 0 0 22px;
+  color: var(--ink);
+}
+
+#v-profile .form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+#v-profile .form > label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 550;
+}
+
+#v-profile .inp {
+  width: 100%;
+  height: 42px;
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  background: var(--surface2);
+  color: var(--ink);
+  padding: 0 12px;
+  font: inherit;
+}
+
+#v-profile .inp:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+#v-profile .form .hint,
+#v-profile .note {
+  color: var(--ink3);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+#v-profile #memoryEnabled {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+#v-profile #profileForm > div,
+#v-profile #passwordForm > div {
+  grid-column: 1 / -1;
+}
+
+#v-profile .btn {
+  min-height: 40px;
+}
+
+#v-profile #logoutEverywhereBtn {
+  border-color: #d97777;
+  color: #c44747;
+}
+
+#v-profile #logoutEverywhereBtn:hover {
+  background: rgba(220, 70, 70, 0.08);
+}
+
+@media (max-width: 650px) {
+  #v-profile {
+    padding: 0 12px;
+  }
+
+  #v-profile > .card {
+    padding: 18px;
+  }
+
+  #v-profile .form {
+    grid-template-columns: 1fr;
+  }
+}
