@@ -268,9 +268,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if verdict.action != "allow":
             st.store.log_guardrail("input", verdict.action, [r["rule"] for r in verdict.reasons], redact(verdict.cleaned), source)
         if verdict.blocked:
-            raise ApiError(422, "guardrail_blocked",
-                           "This text looks like an instruction to the AI rather than a patent claim, so it was not processed. "
-                           "Enter the claim you want to search.")
+            raise ApiError(422, "guardrail_blocked", verdict.message)
         return verdict.cleaned
 
     def record(st: State, payload: dict) -> None:
