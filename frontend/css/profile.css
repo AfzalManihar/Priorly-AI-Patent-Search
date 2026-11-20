@@ -115,3 +115,7 @@
 .recall-claim { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 650px) { .mem-item { flex-direction: column; } }
 .mem-row [hidden], .recall[hidden], #histMore[hidden] { display: none !important; }
+
+#noteText { font: inherit; font-size: 14px; line-height: 1.45; padding: 10px 12px; min-height: 44px; resize: vertical; }
+#noteText::placeholder { color: #8a93a3; font-size: 14px; }
+#noteText:disabled, #noteAdd:disabled { opacity: .55; cursor: not-allowed; }

@@ -93,6 +93,9 @@
       : "Memory is OFF. Turn it on to save notes. Notes you saved earlier stay hidden until you do.";
     $("memToggle").textContent = memoryOn ? "Turn memory off" : "Turn memory on";
     $("noteAdd").disabled = !memoryOn; $("noteText").disabled = !memoryOn;
+    $("noteText").placeholder = memoryOn
+      ? "Write a note, for example a technology area you work in or how you prefer results"
+      : "Turn memory on to write notes";
   }
   function loadNotes() {
     PriorlyAPI.get("/api/memory/notes").then(function (r) {
