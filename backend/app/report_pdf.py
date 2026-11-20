@@ -22,7 +22,9 @@ STAGE_NAMES = {"decompose": "Claim decomposition", "hyde": "HyDE expansion", "hy
 
 
 _PUNCT = {"\u2026": "...", "\u2013": "-", "\u2014": "-", "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
-          "\u2022": "*", "\u2265": ">=", "\u2264": "<=", "\u00d7": "x", "\u2212": "-", "\u2192": "->", "\u00a0": " "}
+          "\u2022": "*", "\u2265": ">=", "\u2264": "<=", "\u00d7": "x", "\u2212": "-", "\u2192": "->", "\u00a0": " ",
+          "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2015": "-", "\u00ad": "", "\u200b": "", "\u200c": "",
+          "\u200d": "", "\u2060": "", "\ufeff": "", "\u2032": "'", "\u2033": '"', "\u00b1": "+/-"}
 _GREEK = {"\u03b1": "alpha", "\u03b2": "beta", "\u03b3": "gamma", "\u03b4": "delta", "\u03b5": "epsilon", "\u03b7": "eta",
           "\u03b8": "theta", "\u03ba": "kappa", "\u03bb": "lambda", "\u03bc": "mu", "\u03bd": "nu", "\u03c0": "pi",
           "\u03c1": "rho", "\u03c3": "sigma", "\u03c4": "tau", "\u03c6": "phi", "\u03c8": "psi", "\u03c9": "omega",
@@ -115,18 +117,22 @@ def build_report_pdf(report: dict, search: dict) -> bytes:
                                      " fell back to a simpler method."), small))
 
     story.append(Paragraph("Results", h2))
+    llm_read = (response.get("retrieval") or {}).get("llm_backend") == "groq" and "explain" not in (response.get("degraded_stages") or [])
+    why_label = "AI reading of this passage: " if llm_read else "Summary (rule-based, not an AI reading): "
     for rank, r in enumerate(results, start=1):
         mark = "  [SHORTLISTED]" if r["id"] in shortlist else ""
         covered = ", ".join(f"E{n}" for n in r["el"]) or "none identified"
+        partial = ", ".join(f"E{n}" for n in (r.get("el_partial") or []))
         block = [
             Paragraph(f"<b>{rank}. {_text(r['title'])}</b>{_text(mark)}", body),
-            Paragraph(_text(f"{r['id']}  |  {r['assignee']}  |  {r['year']}  |  {r['cpc']}"), small),
-            Paragraph(_text(f"Scorer-matched elements: {covered}  |  Score {r['score']:.2f}  |  {r['loc']}"
+            Paragraph(_text("  |  ".join(str(x) for x in (r["id"], r.get("assignee"), r.get("year"), r.get("cpc")) if x)), small),
+            Paragraph(_text(f"Automatic match (term overlap + reranker): {covered}"
+                            + (f"  |  partial: {partial}" if partial else "") + f"  |  Score {r['score']:.2f}  |  {r['loc']}"
                             + ("  |  Found by keyword search only" if r.get("missed_by_vector") else "")), small),
             Spacer(1, 2),
             Paragraph(_text(r["passage"]), passage),
             Spacer(1, 2),
-            Paragraph(_text(r["why"]), body),
+            Paragraph(_text(why_label + str(r["why"])), body),
             Spacer(1, 7),
         ]
         story.append(KeepTogether(block))

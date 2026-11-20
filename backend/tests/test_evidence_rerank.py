@@ -96,23 +96,63 @@ def test_cross_encoder_batches_by_length_and_keeps_scores_per_pair(monkeypatch):
 
 
 def test_defaults_match_the_dev_calibration(monkeypatch):
-    """BGE controls on DEV: unrelated and same-topic passages sit at 0.50-0.56, real matches at 0.68-0.73."""
+    """Thresholds are now on a single sigmoid. The DEV controls, converted from the old double sigmoid
+    (noise 0.50-0.56 -> p 0.00-0.23, real matches 0.68-0.73 -> p 0.75-1.0), keep the same separation at 0.5."""
     for name in ("COVERAGE_SUPPORT_CE", "COVERAGE_PARTIAL_CE", "COVERAGE_SUPPORT_RECALL", "COVERAGE_PARTIAL_RECALL"):
         monkeypatch.delenv(name, raising=False)
     s = Settings.from_env()
-    assert (s.support_ce, s.partial_ce, s.support_recall, s.partial_recall) == (0.6, 0.6, 0.6, 0.3)
+    assert (s.support_ce, s.partial_ce, s.support_recall, s.partial_recall) == (0.5, 0.5, 0.6, 0.3)
 
 
 def test_model_noise_floor_never_counts_even_when_every_word_matches():
     s = Settings.from_env()
-    for noise in (0.50, 0.516, 0.558):  # median / p75 of the same-topic controls
+    for noise in (0.0, 0.064, 0.233):  # median / p75 of the same-topic controls, as single-sigmoid probabilities
         assert classify(noise, 1.0, s) == UNSUPPORTED
-    assert classify(0.60, 1.0, s) == SUPPORTED
-    assert classify(0.728, 1.0, s) == SUPPORTED  # median of the positive control
+    assert classify(0.50, 1.0, s) == SUPPORTED
+    assert classify(0.986, 1.0, s) == SUPPORTED  # median of the positive control
 
 
-def test_supported_versus_partial_comes_from_term_recall_not_the_saturated_model():
+def test_supported_versus_partial_comes_from_term_recall():
     s = Settings.from_env()
-    assert classify(0.73, 0.9, s) == SUPPORTED
-    assert classify(0.73, 0.4, s) == PARTIAL
-    assert classify(0.73, 0.2, s) == UNSUPPORTED
+    assert classify(0.95, 0.9, s) == SUPPORTED
+    assert classify(0.95, 0.4, s) == PARTIAL
+    assert classify(0.95, 0.2, s) == UNSUPPORTED
+
+
+def test_sigmoid_is_applied_once_so_strong_matches_stay_distinguishable(monkeypatch):
+    import math
+    import sys
+    import types
+
+    class Identity:  # stands in for torch.nn.Identity
+        pass
+
+    fake_torch = types.SimpleNamespace(nn=types.SimpleNamespace(Identity=Identity))
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    class Model:
+        activation_fn = "sigmoid"  # what the library sets for a single-label cross-encoder
+
+        def predict(self, pairs, batch_size):
+            assert isinstance(self.activation_fn, Identity)  # the built-in sigmoid is off, so these are logits
+            return [{"a": 6.0, "b": 2.0, "c": -4.0}[q] for q, _ in pairs]
+
+    from app.rerank import _use_raw_logits
+    sc = object.__new__(CrossEncoderScorer)
+    sc.model, sc.cache_enabled, sc.batch_size, sc._cache, sc._scored, sc._reused = Model(), False, 4, {}, 0, 0
+    sc._raw_logits = _use_raw_logits(sc.model)
+    out = sc.score_pairs([("a", "x"), ("b", "x"), ("c", "x")])
+    assert sc._raw_logits and out == [1 / (1 + math.exp(-v)) for v in (6.0, 2.0, -4.0)]
+    assert out[0] > 0.99 and out[0] - out[1] > 0.1  # the old double sigmoid gave both ~0.73
+    assert sc.stats()["activation"] == "raw_logits"
+
+
+def test_without_a_switch_probabilities_pass_through_unchanged():
+    sc = object.__new__(CrossEncoderScorer)  # _raw_logits stays False: the library already applied its sigmoid
+
+    class Model:
+        def predict(self, pairs, batch_size):
+            return [0.98 for _ in pairs]
+
+    sc.model, sc.cache_enabled, sc.batch_size, sc._cache, sc._scored, sc._reused = Model(), False, 4, {}, 0, 0
+    assert sc.score_pairs([("q", "p")]) == [0.98]

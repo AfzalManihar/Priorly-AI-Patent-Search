@@ -54,6 +54,7 @@ class CrossEncoderScorer:
     batch_size = 16
     _model_s = 0.0
     _batches = 0
+    _raw_logits = False  # True once the model's own sigmoid is switched off, so predict() returns logits
 
     def __init__(self, model_name: str, cache: bool = True, batch_size: int = 16):
         try:
@@ -61,6 +62,7 @@ class CrossEncoderScorer:
         except ImportError as exc:  # pragma: no cover
             raise DependencyError("Install requirements-ml.txt to use the bge reranker") from exc
         self.model = CrossEncoder(model_name)
+        self._raw_logits = _use_raw_logits(self.model)
         # Identical (query, passage) pairs get the identical score, so remembering them never changes a ranking.
         # RERANK_CACHE=off turns the memory off, so every search runs the model on every pair again.
         self.cache_enabled = cache
@@ -85,16 +87,39 @@ class CrossEncoderScorer:
             self._model_s += time.perf_counter() - t0
             self._batches += -(-len(missing) // self.batch_size)
             for pair, x in zip(missing, logits):
-                fresh[pair] = 1.0 / (1.0 + math.exp(-float(x)))
+                fresh[pair] = self._to_probability(float(x))
             if self.cache_enabled:
                 self._cache.update(fresh)
         self._scored += len(missing)
         self._reused += len(pairs) - len(missing)
         return [fresh[p] if p in fresh else known[p] for p in pairs]
 
+    def _to_probability(self, x: float) -> float:
+        """One sigmoid, applied exactly once.
+
+        sentence-transformers' CrossEncoder already applies a sigmoid to single-label models. Applying a second one
+        squeezed every score into [0.5, 0.731], so strong matches all showed 0.73 and the ranking lost its signal.
+        """
+        if self._raw_logits:
+            return 1.0 / (1.0 + math.exp(-max(-60.0, min(60.0, x))))
+        return min(1.0, max(0.0, x))  # the library already returned a probability; do not squash it again
+
     def stats(self) -> dict:
-        return {"scored": self._scored, "cached": self._reused,
+        return {"scored": self._scored, "cached": self._reused, "activation": "raw_logits" if self._raw_logits else "model_default",
                 "model_s": round(getattr(self, "_model_s", 0.0), 3), "batches": getattr(self, "_batches", 0)}
+
+
+def _use_raw_logits(model) -> bool:
+    """Turn the library's built-in sigmoid off so Priorly can apply its own, once. False if this version has no switch."""
+    try:
+        import torch
+    except ImportError:  # pragma: no cover
+        return False
+    for attr in ("activation_fn", "default_activation_function"):  # sentence-transformers 4.x / 3.x
+        if hasattr(model, attr):
+            setattr(model, attr, torch.nn.Identity())
+            return True
+    return False
 
 
 def build_scorer(settings):

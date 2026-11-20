@@ -185,3 +185,8 @@ def test_deleting_an_account_removes_its_notes(two):
     uid = b.get("/api/auth/me").json()["user"]["id"]
     assert store.delete_user("second")
     assert store.list_notes(uid) == []
+
+
+def test_pdf_text_keeps_special_hyphens_and_skips_empty_metadata():
+    from app.report_pdf import _drawable
+    assert _drawable("radio‑frequency blood‐oxygen E1–E4 a​b") == "radio-frequency blood-oxygen E1-E4 ab"

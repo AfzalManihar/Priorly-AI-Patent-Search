@@ -57,8 +57,8 @@ class Settings:
     rerank_chunks: int = 3  # RERANK_CHUNKS: passages per patent the cross-encoder scores against the whole claim
     rerank_batch: int = 4  # RERANK_BATCH: pairs per cross-encoder forward pass. Measured on the dev CPU: 4 was faster than 16 and 32
     rerank_elements: bool = False  # RERANK_ELEMENTS=on also scores every claim element against every passage (about 6x the pairs)
-    support_ce: float = 0.6  # COVERAGE_SUPPORT_CE: cross-encoder score an element needs to count as supported (DEV controls: noise floor 0.50-0.56, matches 0.68-0.73)
-    partial_ce: float = 0.6  # COVERAGE_PARTIAL_CE: same level; supported vs partial is decided by term recall, because the model saturates near 0.73
+    support_ce: float = 0.5  # COVERAGE_SUPPORT_CE: cross-encoder probability an element needs to count as supported (single sigmoid; the old double-sigmoid 0.6 equals 0.405 here)
+    partial_ce: float = 0.5  # COVERAGE_PARTIAL_CE: same level; supported vs partial is decided by term recall
     support_recall: float = 0.6  # COVERAGE_SUPPORT_RECALL: share of the element's key terms the passage must contain
     partial_recall: float = 0.3  # COVERAGE_PARTIAL_RECALL
     chunking: str = "claim_aware"  # CHUNKING: one of app.chunkers.CHUNKERS; changing it needs a re-index
@@ -104,8 +104,8 @@ class Settings:
             rerank_chunks=int(_env("RERANK_CHUNKS", "3")),
             rerank_batch=int(_env("RERANK_BATCH", "4")),
             rerank_elements=_env("RERANK_ELEMENTS", "off").strip().lower() in ("on", "1", "true", "yes"),
-            support_ce=float(_env("COVERAGE_SUPPORT_CE", "0.6")),
-            partial_ce=float(_env("COVERAGE_PARTIAL_CE", "0.6")),
+            support_ce=float(_env("COVERAGE_SUPPORT_CE", "0.5")),
+            partial_ce=float(_env("COVERAGE_PARTIAL_CE", "0.5")),
             support_recall=float(_env("COVERAGE_SUPPORT_RECALL", "0.6")),
             partial_recall=float(_env("COVERAGE_PARTIAL_RECALL", "0.3")),
             chunking=_env("CHUNKING", "claim_aware"),
